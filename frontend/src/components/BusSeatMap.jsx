@@ -3,7 +3,6 @@
  * Each bus has its own layout_config & seat positions from the backend.
  */
 export default function BusSeatMap({ seats = [], bookedSeats = [], selectedSeats = [], onSeatClick }) {
-  // Group seats by row
   const rows = {};
   const maxCol = { count: 0 };
 
@@ -15,7 +14,7 @@ export default function BusSeatMap({ seats = [], bookedSeats = [], selectedSeats
     rows[seat.row_number].push(seat);
   });
 
-  const sortedRows = Object.keys(rows).sort((a,b) => Number(a) - Number(b));
+  const sortedRows = Object.keys(rows).sort((a, b) => Number(a) - Number(b));
 
   const isBooked = (num) => bookedSeats.includes(num);
   const isSelected = (num) => selectedSeats.includes(num);
@@ -25,8 +24,8 @@ export default function BusSeatMap({ seats = [], bookedSeats = [], selectedSeats
     if (seat.bg_color) custom.background = seat.bg_color;
     if (seat.text_color) custom.color = seat.text_color;
     if (seat.extra_padding) {
-      custom.width = 36 + seat.extra_padding + 'px';
-      custom.height = 36 + seat.extra_padding + 'px';
+      custom.width = 32 + seat.extra_padding + 'px';
+      custom.height = 32 + seat.extra_padding + 'px';
     }
     return custom;
   };
@@ -49,7 +48,7 @@ export default function BusSeatMap({ seats = [], bookedSeats = [], selectedSeats
   const classLabel = (cls) => {
     if (cls === 'vip') return 'VIP';
     if (cls === 'business') return 'BIZ';
-    return cls.substring(0,3).toUpperCase();
+    return cls.substring(0, 3).toUpperCase();
   };
 
   return (
@@ -57,14 +56,14 @@ export default function BusSeatMap({ seats = [], bookedSeats = [], selectedSeats
       {/* Legend */}
       <div className="seat-legend">
         {[
-          { cls:'vip', label:'VIP', bg:'var(--seat-vip)', color:'var(--seat-vip-text)' },
-          { cls:'business', label:'Business', bg:'var(--seat-business)', color:'#fff' },
-          { cls:'economy', label:'Economy', bg:'var(--seat-economy)', color:'#fff' },
-          { cls:'booked', label:'Booked', bg:'var(--seat-booked)', color:'#fff' },
-          { cls:'selected', label:'Selected', bg:'var(--seat-selected)', color:'#fff' },
+          { cls: 'vip', label: 'VIP', bg: 'var(--seat-vip)', color: 'var(--seat-vip-text)' },
+          { cls: 'business', label: 'Business', bg: 'var(--seat-business)', color: '#fff' },
+          { cls: 'economy', label: 'Economy', bg: 'var(--seat-economy)', color: '#fff' },
+          { cls: 'booked', label: 'Booked', bg: 'var(--seat-booked)', color: '#fff' },
+          { cls: 'selected', label: 'Selected', bg: 'var(--seat-selected)', color: '#fff' },
         ].map(l => (
           <div className="legend-item" key={l.cls}>
-            <div className="legend-dot" style={{background:l.bg,border:l.cls==='economy'?'none':'none'}}></div>
+            <div className="legend-dot" style={{ background: l.bg }}></div>
             <span>{l.label}</span>
           </div>
         ))}
@@ -72,17 +71,18 @@ export default function BusSeatMap({ seats = [], bookedSeats = [], selectedSeats
 
       {/* Seat map */}
       <div className="seat-map-wrapper">
-        {/* Bus front / driver */}
+
+        {/* Bus front */}
         <div className="bus-front">
           <span className="bus-steering">🚌</span>
-          <span style={{fontWeight:700,color:'var(--dl-red)'}}>FRONT</span>
-          <div className="seat driver" style={{width:34,height:34}}>
-            <i className="bi bi-person-fill" style={{fontSize:'.8rem'}}></i>
+          <span style={{ fontWeight: 700, color: 'var(--dl-red)', fontSize: '.72rem' }}>FRONT</span>
+          <div className="seat driver" style={{ width: 30, height: 30 }}>
+            <i className="bi bi-person-fill" style={{ fontSize: '.72rem' }}></i>
           </div>
         </div>
 
         {sortedRows.map(rowNum => {
-          const rowSeats = rows[rowNum].sort((a,b) => a.column_number - b.column_number);
+          const rowSeats = rows[rowNum].sort((a, b) => a.column_number - b.column_number);
           return (
             <div className="seat-row" key={rowNum}>
               {rowSeats.map(seat => (
@@ -96,16 +96,16 @@ export default function BusSeatMap({ seats = [], bookedSeats = [], selectedSeats
                   onClick={() => handleClick(seat)}
                   title={
                     seat.is_aisle_gap ? '' :
-                    isBooked(seat.seat_number) ? `Seat ${seat.seat_number} - Booked` :
-                    `Seat ${seat.seat_number} - ${seat.seat_class.toUpperCase()}`
+                      isBooked(seat.seat_number) ? `Seat ${seat.seat_number} - Booked` :
+                        `Seat ${seat.seat_number} - ${seat.seat_class.toUpperCase()}`
                   }
                 >
                   {!seat.is_aisle_gap && !seat.is_driver_seat && (
                     <>
-                      <span style={{fontSize:'.58rem',opacity:.7}}>
+                      <span style={{ fontSize: '.52rem', opacity: .75 }}>
                         {seat.custom_label || classLabel(seat.seat_class)}
                       </span>
-                      <span style={{fontWeight:800,fontSize:'.72rem'}}>
+                      <span style={{ fontWeight: 800, fontSize: '.65rem' }}>
                         {seat.seat_number}
                       </span>
                     </>
@@ -118,10 +118,10 @@ export default function BusSeatMap({ seats = [], bookedSeats = [], selectedSeats
 
         {/* Bus back */}
         <div style={{
-          background:'#e9ecef',borderRadius:'0 0 8px 8px',
-          textAlign:'center',padding:'.4rem',
-          fontSize:'.75rem',fontWeight:600,color:'var(--dl-gray)',
-          marginTop:4
+          background: '#e9ecef', borderRadius: '0 0 8px 8px',
+          textAlign: 'center', padding: '.35rem',
+          fontSize: '.7rem', fontWeight: 600, color: 'var(--dl-gray)',
+          marginTop: 3,
         }}>
           ← REAR →
         </div>
