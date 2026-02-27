@@ -1,3 +1,20 @@
 ERROR 2026-02-26 19:59:54,428 views M-Pesa STK error: Expecting value: line 1 column 1 (char 0)
 ERROR 2026-02-26 21:00:16,189 views M-Pesa STK error: Expecting value: line 1 column 1 (char 0)
 ERROR 2026-02-27 06:50:40,693 views M-Pesa STK error: Expecting value: line 1 column 1 (char 0)
+ERROR 2026-02-27 07:05:56,955 views M-Pesa STK error: Expecting value: line 1 column 1 (char 0)
+ERROR 2026-02-27 07:13:25,300 views M-Pesa: MPESA_CONSUMER_KEY or MPESA_CONSUMER_SECRET not set in settings
+ERROR 2026-02-27 07:13:25,301 views M-Pesa: Failed to obtain access token
+ERROR 2026-02-27 07:14:22,315 views M-Pesa: MPESA_CONSUMER_KEY or MPESA_CONSUMER_SECRET not set in settings
+ERROR 2026-02-27 07:14:22,317 views M-Pesa: Failed to obtain access token
+INFO 2026-02-27 07:16:08,483 views M-Pesa token response status: 200
+INFO 2026-02-27 07:16:08,488 views M-Pesa STK push payload for DL3E49A34C: phone=254757790687, amount=2760, shortcode=174379
+INFO 2026-02-27 07:16:10,732 views M-Pesa STK response status: 200
+INFO 2026-02-27 07:16:10,733 views M-Pesa STK response body: {'MerchantRequestID': 'b0e0-4bb2-85e7-8d14c215a22b13237', 'CheckoutRequestID': 'ws_CO_27022026071611762757790687', 'ResponseCode': '0', 'ResponseDescription': 'Success. Request accepted for processing', 'CustomerMessage': 'Success. Request accepted for processing'}
+INFO 2026-02-27 12:15:22,538 views M-Pesa token response status: 200
+INFO 2026-02-27 12:15:22,567 views M-Pesa STK push payload for DL646C4F8D: phone=254757790687, amount=2500, shortcode=174379
+INFO 2026-02-27 12:15:25,477 views M-Pesa STK response status: 200
+INFO 2026-02-27 12:15:25,477 views M-Pesa STK response body: {'MerchantRequestID': 'c35f-4cce-81a6-ad6a25b3e59c6854', 'CheckoutRequestID': 'ws_CO_27022026121525191757790687', 'ResponseCode': '0', 'ResponseDescription': 'Success. Request accepted for processing', 'CustomerMessage': 'Success. Request accepted for processing'}
+INFO 2026-02-27 12:21:43,049 views M-Pesa token response status: 200
+INFO 2026-02-27 12:21:43,051 views M-Pesa STK push payload for DL0F0D67A3: phone=254757790687, amount=2500, shortcode=174379
+INFO 2026-02-27 12:21:44,362 views M-Pesa STK response status: 200
+INFO 2026-02-27 12:21:44,363 views M-Pesa STK response body: {'MerchantRequestID': 'c35f-4cce-81a6-ad6a25b3e59c6934', 'CheckoutRequestID': 'ws_CO_27022026122145933757790687', 'ResponseCode': '0', 'ResponseDescription': 'Success. Request accepted for processing', 'CustomerMessage': 'Success. Request accepted for processing'}

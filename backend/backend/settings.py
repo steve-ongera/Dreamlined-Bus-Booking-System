@@ -1,23 +1,14 @@
-import os 
+import os
 from pathlib import Path
+from decouple import config, Csv
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-c&_rsqw_oa!xf4w_u%8o9sg3!-s-ty#2iqo2r5di8s7pn3ij5d')
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+DEBUG = config('DEBUG', default=True, cast=bool)
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-c&_rsqw_oa!xf4w_u%8o9sg3!-s-ty#2iqo2r5di8s7pn3ij5d'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = ['*']
-
-
-# Application definition
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=Csv())
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -26,18 +17,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
-    # Third party
     'rest_framework',
     'corsheaders',
     'django_filters',
-
-    # Local apps
     'booking',
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # Must be
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -66,10 +53,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend.wsgi.application'
 
-
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -77,43 +60,34 @@ DATABASES = {
     }
 }
 
-
-# Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-
-# Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
-
+# ── i18n ──────────────────────────────────────────────────────────────────────
 LANGUAGE_CODE = 'en-us'
-
-TIME_ZONE = 'UTC'
-
+TIME_ZONE = 'Africa/Nairobi'
 USE_I18N = True
-
 USE_TZ = True
 
-# REST Framework
+# ── Static / Media ────────────────────────────────────────────────────────────
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ── REST Framework ────────────────────────────────────────────────────────────
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',
     ],
@@ -126,41 +100,45 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 50,
 }
 
-# CORS - React frontend
+# ── CORS ──────────────────────────────────────────────────────────────────────
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
     "https://dreamline.co.ke",
     "https://www.dreamline.co.ke",
     'http://192.168.100.3:5173',
-    'https://84d6-2c0f-6300-d09-fd00-ecf6-3cb3-9e9c-6b3c.ngrok-free.app',
+    'https://d082-2c0f-6300-d09-fd00-ecf6-3cb3-9e9c-6b3c.ngrok-free.app',
 ]
 CORS_ALLOW_CREDENTIALS = True
 
-# Static / Media
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+# ── Session (needed for anonymous seat locks) ─────────────────────────────────
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_AGE = 86400          # 24 hours
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = False       # set True in production (HTTPS)
 
-# Email (configure for production)
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'tickets@dreamline.co.ke')
+# ── Email ─────────────────────────────────────────────────────────────────────
+EMAIL_BACKEND     = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST        = config('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT        = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS     = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER   = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL  = config('DEFAULT_FROM_EMAIL', default='tickets@dreamline.co.ke')
 
-# M-Pesa Daraja API
-MPESA_CONSUMER_KEY = os.environ.get('MPESA_CONSUMER_KEY', '')
-MPESA_CONSUMER_SECRET = os.environ.get('MPESA_CONSUMER_SECRET', '')
-MPESA_SHORTCODE = os.environ.get('MPESA_SHORTCODE', '174379')  # sandbox shortcode
-MPESA_PASSKEY = os.environ.get('MPESA_PASSKEY', '')
-MPESA_CALLBACK_URL = os.environ.get('MPESA_CALLBACK_URL', 'https://84d6-2c0f-6300-d09-fd00-ecf6-3cb3-9e9c-6b3c.ngrok-free.app/api/v1/payments/callback/')
-MPESA_ENVIRONMENT = os.environ.get('MPESA_ENVIRONMENT', 'sandbox')  # 'sandbox' or 'production'
+# ── M-Pesa ────────────────────────────────────────────────────────────────────
+MPESA_ENVIRONMENT   = config('MPESA_ENVIRONMENT',   default='sandbox')
+MPESA_CONSUMER_KEY  = config('MPESA_CONSUMER_KEY',  default='')
+MPESA_CONSUMER_SECRET = config('MPESA_CONSUMER_SECRET', default='')
+MPESA_SHORTCODE     = config('MPESA_SHORTCODE',     default='174379')
+MPESA_PASSKEY       = config('MPESA_PASSKEY',       default='')
+MPESA_CALLBACK_URL  = config('MPESA_CALLBACK_URL',  default='')
 
-# Logging
+# ── Logging ───────────────────────────────────────────────────────────────────
+LOGS_DIR = BASE_DIR / 'logs'
+LOGS_DIR.mkdir(exist_ok=True)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -174,7 +152,7 @@ LOGGING = {
         'file': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'dreamline.log',
+            'filename': LOGS_DIR / 'dreamline.log',
             'formatter': 'verbose',
         },
         'console': {
@@ -191,17 +169,6 @@ LOGGING = {
     },
 }
 
-# Internationalization
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Africa/Nairobi'
-USE_I18N = True
-USE_TZ = True
-
-# SEO / Site
+# ── Site ──────────────────────────────────────────────────────────────────────
 SITE_NAME = 'Dreamline Bus'
-SITE_URL = 'https://dreamline.co.ke'
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
-
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+SITE_URL  = 'https://dreamline.co.ke'

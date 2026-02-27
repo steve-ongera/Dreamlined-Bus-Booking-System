@@ -2,26 +2,27 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAdminUser
+from rest_framework.views import APIView                          # ← ADD THIS
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
-from django.template.loader import render_to_string
+from django.db import IntegrityError                             # ← ADD THIS
 import requests
 import base64
-import json
-import logging
+import logging                                                    # ← remove json, template imports
 
 from .models import (
     City, BusType, Bus, SeatLayout, Route, BoardingPoint,
-    Trip, SeatPrice, Booking, BookedSeat, Payment, JobPosting
+    Trip, SeatPrice, Booking, BookedSeat, Payment, JobPosting,
+    SeatLock                                                      # ← ADD THIS
 )
 from .serializers import (
     CitySerializer, BusTypeSerializer, BusSerializer, BusListSerializer,
     SeatLayoutSerializer, RouteSerializer, BoardingPointSerializer,
     TripListSerializer, TripDetailSerializer, SeatPriceSerializer,
     BookingCreateSerializer, BookingDetailSerializer,
-    PaymentInitSerializer, PaymentStatusSerializer, JobPostingSerializer
+    PaymentInitSerializer, JobPostingSerializer                   # ← remove PaymentStatusSerializer
 )
 
 logger = logging.getLogger(__name__)
@@ -225,13 +226,11 @@ class BookingViewSet(viewsets.ModelViewSet):
             return Response({'message': 'Booking cancelled successfully.'})
         return Response({'error': 'Cannot cancel this booking.'}, status=400)
 
-
-class PaymentViewSet(viewsets.ViewSet):
+class PaymentInitiateView(APIView):
+    """POST /api/v1/payments/initiate/"""
     permission_classes = [AllowAny]
 
-    @action(detail=False, methods=['post'], url_path='initiate')
-    def initiate(self, request):
-        """Initiate M-Pesa STK Push"""
+    def post(self, request):
         serializer = PaymentInitSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
@@ -247,137 +246,159 @@ class PaymentViewSet(viewsets.ViewSet):
         if booking.status == 'confirmed':
             return Response({'error': 'Booking already paid'}, status=400)
 
-        # Format phone: ensure 254 prefix
         phone = phone.strip().replace('+', '').replace(' ', '')
         if phone.startswith('0'):
             phone = '254' + phone[1:]
         elif not phone.startswith('254'):
             phone = '254' + phone
 
-        try:
-            access_token = self._get_mpesa_token()
-            response = self._stk_push(booking, phone, access_token)
+        access_token = self._get_mpesa_token()
+        if not access_token:
+            return Response({'error': 'Could not connect to M-Pesa. Please try again.'}, status=503)
 
-            if response.get('ResponseCode') == '0':
-                Payment.objects.update_or_create(
-                    booking=booking,
-                    defaults={
-                        'amount': booking.total_amount,
-                        'phone_number': phone,
-                        'checkout_request_id': response.get('CheckoutRequestID', ''),
-                        'merchant_request_id': response.get('MerchantRequestID', ''),
-                        'status': 'pending',
-                    }
-                )
-                return Response({
-                    'success': True,
-                    'message': 'STK Push sent. Enter M-Pesa PIN on your phone.',
-                    'checkout_request_id': response.get('CheckoutRequestID'),
-                    'booking_reference': booking_ref,
-                })
-            else:
-                return Response({'error': response.get('errorMessage', 'M-Pesa error')}, status=400)
+        response = self._stk_push(booking, phone, access_token)
 
-        except Exception as e:
-            logger.error(f"M-Pesa STK error: {e}")
-            return Response({'error': 'Payment initiation failed. Try again.'}, status=500)
-
-    @action(detail=False, methods=['post'], url_path='callback')
-    def callback(self, request):
-        """M-Pesa callback URL"""
-        try:
-            data = request.data
-            stk_callback = data.get('Body', {}).get('stkCallback', {})
-            result_code = stk_callback.get('ResultCode')
-            checkout_request_id = stk_callback.get('CheckoutRequestID')
-
-            payment = Payment.objects.get(checkout_request_id=checkout_request_id)
-
-            if result_code == 0:
-                # Success
-                items = {
-                    item['Name']: item.get('Value')
-                    for item in stk_callback.get('CallbackMetadata', {}).get('Item', [])
+        if response.get('ResponseCode') == '0':
+            Payment.objects.update_or_create(
+                booking=booking,
+                defaults={
+                    'amount': booking.total_amount,
+                    'phone_number': phone,
+                    'checkout_request_id': response.get('CheckoutRequestID', ''),
+                    'merchant_request_id': response.get('MerchantRequestID', ''),
+                    'status': 'pending',
                 }
-                payment.mpesa_receipt_number = str(items.get('MpesaReceiptNumber', ''))
-                payment.transaction_date = timezone.now()
-                payment.status = 'completed'
-                payment.result_code = str(result_code)
-                payment.result_desc = stk_callback.get('ResultDesc', '')
-                payment.save()
-
-                # Confirm booking
-                booking = payment.booking
-                booking.status = 'confirmed'
-                booking.save()
-
-                # Send ticket email
-                self._send_ticket_email(booking)
-            else:
-                payment.status = 'failed'
-                payment.result_code = str(result_code)
-                payment.result_desc = stk_callback.get('ResultDesc', '')
-                payment.save()
-
-        except Exception as e:
-            logger.error(f"M-Pesa callback error: {e}")
-
-        return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
-
-    @action(detail=False, methods=['get'], url_path='status/(?P<booking_ref>[^/.]+)')
-    def payment_status(self, request, booking_ref=None):
-        """Poll payment status every 5 seconds from frontend"""
-        try:
-            booking = Booking.objects.get(reference__iexact=booking_ref)
-            payment = booking.payment
+            )
             return Response({
-                'booking_status': booking.status,
-                'payment_status': payment.status,
-                'receipt': payment.mpesa_receipt_number,
-                'message': payment.result_desc,
+                'success': True,
+                'message': 'STK Push sent. Enter M-Pesa PIN on your phone.',
+                'checkout_request_id': response.get('CheckoutRequestID'),
+                'booking_reference': booking_ref,
             })
-        except Booking.DoesNotExist:
-            return Response({'error': 'Booking not found'}, status=404)
-        except Payment.DoesNotExist:
-            return Response({'booking_status': booking.status, 'payment_status': 'not_initiated'})
+        else:
+            err_msg = response.get('errorMessage') or response.get('ResultDesc') or 'M-Pesa error. Please try again.'
+            logger.error(f"M-Pesa STK failed for {booking_ref}: {response}")
+            return Response({'error': err_msg}, status=400)
 
     def _get_mpesa_token(self):
+        environment = getattr(settings, 'MPESA_ENVIRONMENT', 'sandbox')
+        base_url = 'https://sandbox.safaricom.co.ke' if environment == 'sandbox' else 'https://api.safaricom.co.ke'
         consumer_key = settings.MPESA_CONSUMER_KEY
         consumer_secret = settings.MPESA_CONSUMER_SECRET
+        if not consumer_key or not consumer_secret:
+            logger.error("M-Pesa: MPESA_CONSUMER_KEY or MPESA_CONSUMER_SECRET not set in settings")
+            return None
         credentials = base64.b64encode(f"{consumer_key}:{consumer_secret}".encode()).decode()
-        response = requests.get(
-            'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials',
-            headers={'Authorization': f'Basic {credentials}'}
-        )
-        return response.json().get('access_token')
+        try:
+            response = requests.get(
+                f'{base_url}/oauth/v1/generate?grant_type=client_credentials',
+                headers={'Authorization': f'Basic {credentials}'},
+                timeout=15,
+            )
+            logger.info(f"M-Pesa token response status: {response.status_code}")
+            if response.status_code != 200 or not response.text.strip():
+                logger.error(f"M-Pesa token HTTP {response.status_code}: {response.text[:300]}")
+                return None
+            data = response.json()
+            token = data.get('access_token')
+            if not token:
+                logger.error(f"M-Pesa token missing in response: {data}")
+            return token
+        except requests.exceptions.Timeout:
+            logger.error("M-Pesa token request timed out")
+            return None
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"M-Pesa token connection error: {e}")
+            return None
+        except ValueError as e:
+            logger.error(f"M-Pesa token JSON parse error: {e}")
+            return None
 
     def _stk_push(self, booking, phone, access_token):
+        environment = getattr(settings, 'MPESA_ENVIRONMENT', 'sandbox')
+        base_url = 'https://sandbox.safaricom.co.ke' if environment == 'sandbox' else 'https://api.safaricom.co.ke'
         timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
         shortcode = settings.MPESA_SHORTCODE
         passkey = settings.MPESA_PASSKEY
-        password = base64.b64encode(
-            f"{shortcode}{passkey}{timestamp}".encode()
-        ).decode()
-
+        password = base64.b64encode(f"{shortcode}{passkey}{timestamp}".encode()).decode()
+        amount = max(1, int(booking.total_amount))
         payload = {
             "BusinessShortCode": shortcode,
             "Password": password,
             "Timestamp": timestamp,
             "TransactionType": "CustomerPayBillOnline",
-            "Amount": int(booking.total_amount),
+            "Amount": amount,
             "PartyA": phone,
             "PartyB": shortcode,
             "PhoneNumber": phone,
             "CallBackURL": settings.MPESA_CALLBACK_URL,
             "AccountReference": booking.reference,
-            "TransactionDesc": f"Dreamline Bus Ticket {booking.reference}",
+            "TransactionDesc": f"Dreamline Ticket {booking.reference}",
         }
-        response = requests.post(
-            'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest',
-            json=payload,
-            headers={'Authorization': f'Bearer {access_token}'}
-        )
-        return response.json()
+        logger.info(f"M-Pesa STK push payload for {booking.reference}: phone={phone}, amount={amount}, shortcode={shortcode}")
+        try:
+            response = requests.post(
+                f'{base_url}/mpesa/stkpush/v1/processrequest',
+                json=payload,
+                headers={'Authorization': f'Bearer {access_token}', 'Content-Type': 'application/json'},
+                timeout=30,
+            )
+            logger.info(f"M-Pesa STK response status: {response.status_code}")
+            if not response.text.strip():
+                return {'errorMessage': f'Empty response from M-Pesa (HTTP {response.status_code})'}
+            try:
+                data = response.json()
+                logger.info(f"M-Pesa STK response body: {data}")
+                return data
+            except ValueError:
+                return {'errorMessage': f'Invalid response from M-Pesa: {response.text[:200]}'}
+        except requests.exceptions.Timeout:
+            return {'errorMessage': 'M-Pesa request timed out. Please try again.'}
+        except requests.exceptions.ConnectionError as e:
+            return {'errorMessage': f'Could not reach M-Pesa: {e}'}
+
+
+class PaymentCallbackView(APIView):
+    """POST /api/v1/payments/callback/ — called by Safaricom"""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        try:
+            stk = request.data.get('Body', {}).get('stkCallback', {})
+            result_code = stk.get('ResultCode')
+            checkout_id = stk.get('CheckoutRequestID')
+            logger.info(f"M-Pesa callback: ResultCode={result_code} CheckoutID={checkout_id}")
+            try:
+                payment = Payment.objects.get(checkout_request_id=checkout_id)
+            except Payment.DoesNotExist:
+                logger.warning(f"M-Pesa callback: no Payment for CheckoutID={checkout_id}")
+                return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+            if result_code == 0:
+                items = {
+                    i['Name']: i.get('Value')
+                    for i in stk.get('CallbackMetadata', {}).get('Item', [])
+                }
+                payment.mpesa_receipt_number = str(items.get('MpesaReceiptNumber', ''))
+                payment.transaction_date = timezone.now()
+                payment.status = 'completed'
+                payment.result_code = str(result_code)
+                payment.result_desc = stk.get('ResultDesc', '')
+                payment.save()
+                booking = payment.booking
+                booking.status = 'confirmed'
+                booking.save()
+                self._send_ticket_email(booking)
+                logger.info(f"Payment completed for {booking.reference}")
+            else:
+                payment.status = 'failed'
+                payment.result_code = str(result_code)
+                payment.result_desc = stk.get('ResultDesc', '')
+                payment.save()
+                logger.info(f"Payment failed: {payment.result_desc}")
+        except Exception as e:
+            logger.error(f"M-Pesa callback error: {e}", exc_info=True)
+        return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
     def _send_ticket_email(self, booking):
         try:
@@ -418,6 +439,30 @@ class PaymentViewSet(viewsets.ViewSet):
             logger.error(f"Email send failed for {booking.reference}: {e}")
 
 
+class PaymentStatusView(APIView):
+    """GET /api/v1/payments/status/<booking_ref>/"""
+    permission_classes = [AllowAny]
+
+    def get(self, request, booking_ref):
+        try:
+            booking = Booking.objects.get(reference__iexact=booking_ref)
+        except Booking.DoesNotExist:
+            return Response({'error': 'Booking not found'}, status=404)
+        try:
+            payment = booking.payment
+            return Response({
+                'booking_status': booking.status,
+                'payment_status': payment.status,
+                'receipt': payment.mpesa_receipt_number,
+                'message': payment.result_desc,
+            })
+        except Payment.DoesNotExist:
+            return Response({
+                'booking_status': booking.status,
+                'payment_status': 'not_initiated',
+            })
+            
+            
 class JobPostingViewSet(viewsets.ModelViewSet):
     queryset = JobPosting.objects.filter(is_active=True)
     serializer_class = JobPostingSerializer

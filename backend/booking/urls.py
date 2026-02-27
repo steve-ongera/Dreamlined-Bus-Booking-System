@@ -3,17 +3,16 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-# ── Public views ──────────────────────────────────────────────────────────────
 from .views import (
+    # Public viewsets
     CityViewSet, BusTypeViewSet, BusViewSet, RouteViewSet,
-    BoardingPointViewSet, TripViewSet, BookingViewSet,
-    PaymentViewSet, JobPostingViewSet, SeatLockView, SeatStatusView,
-)
-
-# ── Admin views ───────────────────────────────────────────────────────────────
-from .views import (
-    AdminLoginView, AdminMeView,
-    AdminUserViewSet,
+    BoardingPointViewSet, TripViewSet, BookingViewSet, JobPostingViewSet,
+    # Payment APIViews
+    PaymentInitiateView, PaymentCallbackView, PaymentStatusView,
+    # Seat locking
+    SeatLockView, SeatStatusView,
+    # Admin
+    AdminLoginView, AdminMeView, AdminUserViewSet,
     DashboardView, RevenueChartView, BookingsByRouteView,
     AdminCityViewSet, AdminBusTypeViewSet, AdminBusViewSet,
     AdminRouteViewSet, AdminBoardingPointViewSet,
@@ -29,7 +28,6 @@ public_router.register(r'routes',          RouteViewSet,         basename='route
 public_router.register(r'boarding-points', BoardingPointViewSet, basename='boarding-point')
 public_router.register(r'trips',           TripViewSet,          basename='trip')
 public_router.register(r'bookings',        BookingViewSet,       basename='booking')
-public_router.register(r'payments',        PaymentViewSet,       basename='payment')
 public_router.register(r'jobs',            JobPostingViewSet,    basename='job')
 
 # ── Admin router ──────────────────────────────────────────────────────────────
@@ -46,12 +44,12 @@ admin_router.register(r'jobs',            AdminJobPostingViewSet,    basename='a
 
 # ── Admin URL patterns ────────────────────────────────────────────────────────
 admin_urlpatterns = [
-    path('auth/login/',                  AdminLoginView.as_view(),           name='admin-login'),
-    path('auth/refresh/',                TokenRefreshView.as_view(),         name='admin-token-refresh'),
-    path('auth/me/',                     AdminMeView.as_view(),              name='admin-me'),
-    path('dashboard/stats/',             DashboardView.as_view(),            name='admin-dashboard-stats'),
-    path('dashboard/revenue-chart/',     RevenueChartView.as_view(),         name='admin-revenue-chart'),
-    path('dashboard/bookings-by-route/', BookingsByRouteView.as_view(),      name='admin-bookings-by-route'),
+    path('auth/login/',                  AdminLoginView.as_view(),          name='admin-login'),
+    path('auth/refresh/',                TokenRefreshView.as_view(),        name='admin-token-refresh'),
+    path('auth/me/',                     AdminMeView.as_view(),             name='admin-me'),
+    path('dashboard/stats/',             DashboardView.as_view(),           name='admin-dashboard-stats'),
+    path('dashboard/revenue-chart/',     RevenueChartView.as_view(),        name='admin-revenue-chart'),
+    path('dashboard/bookings-by-route/', BookingsByRouteView.as_view(),     name='admin-bookings-by-route'),
     path('', include(admin_router.urls)),
 ]
 
@@ -60,10 +58,14 @@ urlpatterns = [
     # Admin API  →  /api/v1/admin-api/...
     path('admin-api/', include(admin_urlpatterns)),
 
-    # Seat lock / real-time status  →  /api/v1/trips/<slug>/lock-seats/
-    #                                   /api/v1/trips/<slug>/seat-status/
-    path('trips/<slug:trip_slug>/lock-seats/',  SeatLockView.as_view(),  name='seat-lock'),
-    path('trips/<slug:trip_slug>/seat-status/', SeatStatusView.as_view(), name='seat-status'),
+    # Payments
+    path('payments/initiate/',                  PaymentInitiateView.as_view(),  name='payment-initiate'),
+    path('payments/callback/',                  PaymentCallbackView.as_view(),  name='payment-callback'),
+    path('payments/status/<str:booking_ref>/',  PaymentStatusView.as_view(),    name='payment-status'),
+
+    # Real-time seat locking
+    path('trips/<slug:trip_slug>/lock-seats/',  SeatLockView.as_view(),         name='seat-lock'),
+    path('trips/<slug:trip_slug>/seat-status/', SeatStatusView.as_view(),       name='seat-status'),
 
     # Public router  →  /api/v1/...
     path('', include(public_router.urls)),
