@@ -11,6 +11,9 @@ import TrackTicket from './pages/TrackTicket';
 import Contact from './pages/Contact';
 import Careers from './pages/Careers';
 import AboutDreamline from './pages/AboutDreamline';
+import AdminApp from './admin/AdminApp';
+ 
+ 
 
 // Scroll to top on route change
 function ScrollToTop() {
@@ -35,6 +38,7 @@ export default function App() {
             <Route path="/track/:reference" element={<TrackTicket />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/careers" element={<Careers />} />
+            <Route path="/admin-panel/*" element={<AdminApp />} />
           </Routes>
         </main>
         <Footer />
