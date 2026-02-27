@@ -30,7 +30,6 @@ async function getSeatStatus(tripSlug) {
   return res.json();
 }
 
-// ── NEW: trigger global expired-lock cleanup on the server ───────────────────
 async function triggerLockCleanup() {
   try {
     await fetch(`${BASE}/api/v1/seat-locks/cleanup/`, {
@@ -39,7 +38,7 @@ async function triggerLockCleanup() {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch {
-    // fire-and-forget — never block the UI on this
+    // fire-and-forget
   }
 }
 
@@ -111,13 +110,12 @@ export default function Results() {
 
   const [selectedSeats, setSelectedSeats] = useState([]);
 
-  // Real-time seat status
-  const [bookedSeats, setBookedSeats]         = useState([]);
-  const [lockedByOthers, setLockedByOthers]   = useState([]);
-  const [myLocks, setMyLocks]                 = useState({});   // { "1A": secondsRemaining }
-  const [lockError, setLockError]             = useState('');
-  const pollRef        = useRef(null);
-  const cleanupRef     = useRef(null);   // ← NEW: separate interval for cleanup
+  const [bookedSeats, setBookedSeats]       = useState([]);
+  const [lockedByOthers, setLockedByOthers] = useState([]);
+  const [myLocks, setMyLocks]               = useState({});
+  const [lockError, setLockError]           = useState('');
+  const pollRef    = useRef(null);
+  const cleanupRef = useRef(null);
 
   const [boardingPoints, setBoardingPoints] = useState([]);
   const [droppingPoints, setDroppingPoints] = useState([]);
@@ -135,29 +133,21 @@ export default function Results() {
   const [paymentStatus, setPaymentStatus]   = useState(null);
   const [polling, setPolling]               = useState(false);
 
-  // ── Stop helpers ─────────────────────────────────────────────────────────────
+  // ── Stop helpers ──────────────────────────────────────────────────────────
   const stopPolling = useCallback(() => {
     if (pollRef.current)    { clearInterval(pollRef.current);    pollRef.current    = null; }
   }, []);
 
-  // ── NEW: stop the cleanup interval ──────────────────────────────────────────
   const stopCleanupInterval = useCallback(() => {
     if (cleanupRef.current) { clearInterval(cleanupRef.current); cleanupRef.current = null; }
   }, []);
 
-  // Cleanup on unmount
-  useEffect(() => () => {
-    stopPolling();
-    stopCleanupInterval();
-  }, [stopPolling, stopCleanupInterval]);
+  useEffect(() => () => { stopPolling(); stopCleanupInterval(); }, [stopPolling, stopCleanupInterval]);
 
-  // ── Load trips — also run a one-shot cleanup on page load ────────────────────
+  // ── Load trips ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!origin || !destination || !date) { navigate('/'); return; }
-
-    // ── NEW: purge any globally stale locks when user first lands on this page
     triggerLockCleanup();
-
     setLoading(true);
     searchTrips(origin, destination, date)
       .then(data => { setTrips(data.results || []); setError(''); })
@@ -169,29 +159,21 @@ export default function Results() {
   const fetchSeatStatus = useCallback(async (tripSlug) => {
     try {
       const st = await getSeatStatus(tripSlug);
-      setBookedSeats(st.booked             || []);
+      setBookedSeats(st.booked              || []);
       setLockedByOthers(st.locked_by_others || []);
-      setMyLocks(st.my_locks               || {});
-
-      // If any of MY selected seats were taken while I was viewing, deselect them
+      setMyLocks(st.my_locks                || {});
       setSelectedSeats(prev => {
-        const nowUnavailable = [
-          ...(st.booked             || []),
-          ...(st.locked_by_others   || []),
-        ];
+        const nowUnavailable = [...(st.booked || []), ...(st.locked_by_others || [])];
         const safe = prev.filter(n => !nowUnavailable.includes(n));
-        if (safe.length !== prev.length) {
+        if (safe.length !== prev.length)
           setLockError('One or more of your selected seats was taken by another passenger.');
-        }
         return safe;
       });
     } catch {}
   }, []);
 
-  // ── NEW: start cleanup interval (every 60 s while user is on seat panel) ────
   const startCleanupInterval = useCallback(() => {
     stopCleanupInterval();
-    // Run immediately once, then every 60 seconds
     triggerLockCleanup();
     cleanupRef.current = setInterval(triggerLockCleanup, 60_000);
   }, [stopCleanupInterval]);
@@ -205,12 +187,9 @@ export default function Results() {
   // ── Select a trip ─────────────────────────────────────────────────────────
   const handleSelectTrip = async (trip) => {
     stopPolling();
-    stopCleanupInterval(); // ← NEW
-
-    // Release any previous locks
-    if (selectedTrip && selectedSeats.length > 0) {
+    stopCleanupInterval();
+    if (selectedTrip && selectedSeats.length > 0)
       await lockSeats(selectedTrip.slug, selectedSeats, 'release').catch(() => {});
-    }
 
     setSelectedTrip(trip);
     setSelectedSeats([]);
@@ -226,53 +205,41 @@ export default function Results() {
       const detail = await getTripDetail(trip.slug);
       setTripDetail(detail);
       setBookedSeats(detail.booked_seat_numbers || []);
-
       const bp = await getBoardingPoints(origin);
       const dp = await getBoardingPoints(destination);
       setBoardingPoints(bp.results || bp);
       setDroppingPoints(dp.results || dp);
-
       startPolling(trip.slug);
-      startCleanupInterval(); // ← NEW: begin periodic global cleanup
+      startCleanupInterval();
     } catch {
       setError('Failed to load seat details.');
     } finally {
       setLoadingDetail(false);
     }
-
     setTimeout(() => document.getElementById('seat-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
   };
 
-  // ── Seat click → lock immediately ─────────────────────────────────────────
+  // ── Seat click ────────────────────────────────────────────────────────────
   const handleSeatClick = async (seat) => {
     if (!selectedTrip) return;
     const num = seat.seat_number;
     setLockError('');
-
-    const isCurrentlySelected = selectedSeats.includes(num);
-
-    if (isCurrentlySelected) {
-      // DESELECT — release lock
+    if (selectedSeats.includes(num)) {
       setSelectedSeats(prev => prev.filter(n => n !== num));
       await lockSeats(selectedTrip.slug, [num], 'release').catch(() => {});
     } else {
-      // SELECT — try to lock
       const res = await lockSeats(selectedTrip.slug, [num], 'lock');
       if (res.locked) {
         setSelectedSeats(prev => [...prev, num]);
         setMyLocks(prev => ({ ...prev, [num]: res.expires_in_seconds }));
       } else {
-        setLockError(
-          res.locked?.length === 0
-            ? `Seat ${num} was just taken by another passenger.`
-            : res.error || `Could not lock seat ${num}. Try another.`
-        );
+        setLockError(res.error || `Could not lock seat ${num}. Try another.`);
         fetchSeatStatus(selectedTrip.slug);
       }
     }
   };
 
-  // ── Lock expires for one of my seats ──────────────────────────────────────
+  // ── Lock expires ──────────────────────────────────────────────────────────
   const handleLockExpired = async (seatNumber) => {
     setSelectedSeats(prev => prev.filter(n => n !== seatNumber));
     setMyLocks(prev => { const next = { ...prev }; delete next[seatNumber]; return next; });
@@ -294,26 +261,20 @@ export default function Results() {
   // ── Book ──────────────────────────────────────────────────────────────────
   const handleBook = async () => {
     const { name, email, phone, idNumber, nationality, boardingPoint, droppingPoint } = form;
-    if (!name || !email || !phone || !idNumber) {
-      alert('Please fill in all required fields.'); return;
-    }
+    if (!name || !email || !phone || !idNumber) { alert('Please fill in all required fields.'); return; }
     try {
       const data = await createBooking({
-        trip_slug:            selectedTrip.slug,
-        seat_numbers:         selectedSeats,
-        boarding_point_slug:  boardingPoint  || undefined,
-        dropping_point_slug:  droppingPoint  || undefined,
-        passenger_name:       name,
-        passenger_email:      email,
-        passenger_phone:      phone,
-        passenger_id_number:  idNumber,
+        trip_slug: selectedTrip.slug, seat_numbers: selectedSeats,
+        boarding_point_slug: boardingPoint || undefined,
+        dropping_point_slug: droppingPoint || undefined,
+        passenger_name: name, passenger_email: email,
+        passenger_phone: phone, passenger_id_number: idNumber,
         passenger_nationality: nationality,
       });
       setBooking(data);
       setFormStep('payment');
       stopPolling();
-      stopCleanupInterval(); // ← NEW: stop cleanup once booking is created
-      // Locks are now converted to a real pending booking — release them
+      stopCleanupInterval();
       await lockSeats(selectedTrip.slug, selectedSeats, 'release').catch(() => {});
     } catch (err) {
       const msg = err.response?.data;
@@ -324,8 +285,7 @@ export default function Results() {
   // ── Payment ───────────────────────────────────────────────────────────────
   const handlePayment = async () => {
     if (!paymentPhone) { setPaymentError('Enter your M-Pesa phone number.'); return; }
-    setPaymentLoading(true);
-    setPaymentError('');
+    setPaymentLoading(true); setPaymentError('');
     try {
       await initiatePayment(booking.reference, paymentPhone);
       setPolling(true);
@@ -333,21 +293,14 @@ export default function Results() {
         try {
           const st = await getPaymentStatus(booking.reference);
           setPaymentStatus(st);
-          if (st.payment_status === 'completed' || st.booking_status === 'confirmed') {
-            clearInterval(interval); setPolling(false);
-          }
-          if (st.payment_status === 'failed' || st.payment_status === 'cancelled') {
-            clearInterval(interval); setPolling(false);
-            setPaymentError(st.message || 'Payment failed. Please try again.');
-          }
+          if (st.payment_status === 'completed' || st.booking_status === 'confirmed') { clearInterval(interval); setPolling(false); }
+          if (st.payment_status === 'failed'    || st.payment_status === 'cancelled') { clearInterval(interval); setPolling(false); setPaymentError(st.message || 'Payment failed.'); }
         } catch {}
       }, 5000);
       setTimeout(() => { clearInterval(interval); setPolling(false); }, 120000);
     } catch (err) {
       setPaymentError(err.response?.data?.error || 'Payment initiation failed.');
-    } finally {
-      setPaymentLoading(false);
-    }
+    } finally { setPaymentLoading(false); }
   };
 
   // ── Formatters ────────────────────────────────────────────────────────────
@@ -357,20 +310,14 @@ export default function Results() {
     const hr = parseInt(h);
     return `${hr % 12 || 12}:${m} ${hr >= 12 ? 'PM' : 'AM'}`;
   };
-
   const formatDate = (d) => {
     if (!d) return '';
-    return new Date(d).toLocaleDateString('en-KE', {
-      weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
-    });
+    return new Date(d).toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   };
+  const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  // Minimum lock remaining across all my selected seats
   const minLockRemaining = selectedSeats.length > 0
-    ? Math.min(...selectedSeats.map(n => myLocks[n] ?? 300))
-    : null;
-
-  // The seat that will expire first (for the countdown display)
+    ? Math.min(...selectedSeats.map(n => myLocks[n] ?? 300)) : null;
   const soonestExpiringSeat = selectedSeats.reduce((min, n) => {
     const t = myLocks[n] ?? 300;
     return (!min || t < (myLocks[min] ?? 300)) ? n : min;
@@ -384,14 +331,10 @@ export default function Results() {
       <div className="page-header">
         <div className="container">
           <div className="d-flex align-items-center justify-content-center gap-2 flex-wrap">
-            <span style={{ fontSize: '.95rem', fontWeight: 700 }}>
-              {origin.charAt(0).toUpperCase() + origin.slice(1)}
-            </span>
+            <span style={{ fontSize: '.95rem', fontWeight: 800 }}>{cap(origin)}</span>
             <i className="bi bi-arrow-right" style={{ color: 'var(--dl-gold)', fontSize: '.85rem' }} />
-            <span style={{ fontSize: '.95rem', fontWeight: 700 }}>
-              {destination.charAt(0).toUpperCase() + destination.slice(1)}
-            </span>
-            <span style={{ opacity: .8, fontSize: '.8rem' }}>| {formatDate(date)}</span>
+            <span style={{ fontSize: '.95rem', fontWeight: 800 }}>{cap(destination)}</span>
+            <span style={{ opacity: .65, fontSize: '.78rem', fontWeight: 400 }}>· {formatDate(date)}</span>
           </div>
         </div>
       </div>
@@ -408,25 +351,25 @@ export default function Results() {
           {/* ── Trip list ── */}
           <div className="col-12 col-lg-5">
             <div className="d-flex justify-content-between align-items-center mb-2">
-              <h6 className="mb-0 fw-700" style={{ fontSize: '.88rem' }}>
-                <i className="bi bi-list-ul me-1" style={{ color: 'var(--dl-red)' }} />
-                {loading ? 'Searching...' : `${trips.length} bus${trips.length !== 1 ? 'es' : ''} found`}
-              </h6>
+              <span style={{ fontSize: '.78rem', color: '#999', fontWeight: 500 }}>
+                {loading ? 'Searching...' : `${trips.length} result${trips.length !== 1 ? 's' : ''}`}
+              </span>
               <button
                 className="btn-dl-outline"
-                style={{ padding: '.3rem .7rem', fontSize: '.75rem' }}
+                style={{ padding: '.25rem .6rem', fontSize: '.73rem' }}
                 onClick={() => navigate('/')}
               >
                 <i className="bi bi-arrow-left me-1" />Back
               </button>
             </div>
 
+            {/* Skeletons */}
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="trip-card mb-2">
-                  <div className="skeleton mb-2" style={{ height: 14, width: '60%' }} />
-                  <div className="skeleton mb-2" style={{ height: 18, width: '80%' }} />
-                  <div className="skeleton"      style={{ height: 12, width: '40%' }} />
+                <div key={i} style={{ background: '#fff', border: '1.5px solid #e8e8ec', borderRadius: 10, padding: '.6rem .85rem', marginBottom: '.5rem' }}>
+                  <div className="skeleton mb-2" style={{ height: 12, width: '55%' }} />
+                  <div className="skeleton mb-2" style={{ height: 14, width: '75%' }} />
+                  <div className="skeleton"      style={{ height: 10, width: '35%' }} />
                 </div>
               ))
             ) : trips.length === 0 ? (
@@ -439,63 +382,112 @@ export default function Results() {
                 </button>
               </div>
             ) : (
-              trips.map(trip => (
-                <div
-                  key={trip.slug}
-                  className={`trip-card ${selectedTrip?.slug === trip.slug ? 'selected' : ''}`}
-                  onClick={() => handleSelectTrip(trip)}
-                >
-                  <div className="d-flex justify-content-between align-items-start mb-2">
-                    <div>
-                      <div className="d-flex align-items-center gap-2">
+              trips.map(trip => {
+                const isSelected = selectedTrip?.slug === trip.slug;
+                const minPrice   = Math.min(...(trip.seat_prices?.map(p => Number(p.price)) || [0]));
+                return (
+                  <div
+                    key={trip.slug}
+                    onClick={() => handleSelectTrip(trip)}
+                    style={{
+                      background: '#fff',
+                      border: `1.5px solid ${isSelected ? 'var(--dl-red)' : '#e8e8ec'}`,
+                      borderRadius: 10,
+                      padding: '.58rem .85rem',
+                      marginBottom: '.45rem',
+                      cursor: 'pointer',
+                      transition: 'border-color .15s, box-shadow .15s',
+                      boxShadow: isSelected ? '0 2px 10px rgba(204,0,0,.07)' : 'none',
+                    }}
+                  >
+                    {/* ── Row 1: Origin → Destination + price ── */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+
+                      {/* Left: cities + times */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+
+                        {/* Origin */}
                         <div>
-                          <div className="trip-time">{formatTime(trip.departure_time)}</div>
-                          <div style={{ fontSize: '.72rem', color: 'var(--dl-gray)' }}>{trip.origin}</div>
+                          <div style={{ fontWeight: 800, fontSize: '.88rem', color: '#111', lineHeight: 1.15 }}>
+                            {cap(trip.origin)}
+                          </div>
+                          <div style={{ fontSize: '.68rem', color: '#999', fontWeight: 400, marginTop: 1 }}>
+                            {formatTime(trip.departure_time)}
+                          </div>
                         </div>
-                        <div className="text-center" style={{ minWidth: 50 }}>
-                          <div className="trip-duration">
+
+                        {/* Arrow + duration */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 40 }}>
+                          <div style={{ fontSize: '.58rem', color: '#bbb', fontWeight: 500, marginBottom: 1 }}>
                             {trip.duration_minutes
                               ? `${Math.floor(trip.duration_minutes / 60)}h ${trip.duration_minutes % 60}m`
                               : '--'}
                           </div>
-                          <div style={{ height: 1, background: 'var(--dl-border)', margin: '3px 0' }} />
+                          <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                            <div style={{ flex: 1, height: 1, background: '#ddd' }} />
+                            <i className="bi bi-caret-right-fill" style={{ fontSize: '.42rem', color: '#ccc' }} />
+                          </div>
                         </div>
+
+                        {/* Destination */}
                         <div>
-                          <div className="trip-time">{formatTime(trip.arrival_time)}</div>
-                          <div style={{ fontSize: '.72rem', color: 'var(--dl-gray)' }}>{trip.destination}</div>
+                          <div style={{ fontWeight: 800, fontSize: '.88rem', color: '#111', lineHeight: 1.15 }}>
+                            {cap(trip.destination)}
+                          </div>
+                          <div style={{ fontSize: '.68rem', color: '#999', fontWeight: 400, marginTop: 1 }}>
+                            {formatTime(trip.arrival_time)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: price */}
+                      <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 8 }}>
+                        <div style={{
+                          fontWeight: 800, fontSize: '.88rem',
+                          color: isSelected ? 'var(--dl-red)' : '#222',
+                        }}>
+                          KES {minPrice.toLocaleString()}+
+                        </div>
+                        <div style={{ fontSize: '.63rem', color: '#aaa', marginTop: 1 }}>
+                          {trip.available_seats} left
                         </div>
                       </div>
                     </div>
-                    <div className="text-end" style={{ flexShrink: 0, marginLeft: 8 }}>
-                      <div className="trip-price">
-                        KES {Math.min(...(trip.seat_prices?.map(p => Number(p.price)) || [0])).toLocaleString()}+
-                      </div>
-                      <div style={{ fontSize: '.7rem', color: 'var(--dl-gray)' }}>
-                        {trip.available_seats} seats left
-                      </div>
+
+                    {/* ── Row 2: bus + amenities + class badges ── */}
+                    <div style={{ marginTop: '.38rem', display: 'flex', flexWrap: 'wrap', gap: '3px', alignItems: 'center' }}>
+                      {/* Bus name */}
+                      <span style={{
+                        fontSize: '.65rem', fontWeight: 600, color: '#666',
+                        background: '#f4f4f6', borderRadius: 4, padding: '.08rem .38rem',
+                      }}>
+                        <i className="bi bi-bus-front" style={{ fontSize: '.58rem', marginRight: 3 }} />
+                        {trip.bus_name || trip.bus_type}
+                      </span>
+
+                      {/* Amenities */}
+                      {trip.amenities?.slice(0, 3).map(a => (
+                        <span key={a} style={{
+                          fontSize: '.62rem', color: '#888', background: '#f4f4f6',
+                          borderRadius: 4, padding: '.08rem .32rem', fontWeight: 400,
+                        }}>{a}</span>
+                      ))}
+
+                      {/* Seat class badges — subtle, no heavy colour fill */}
+                      {trip.seat_prices?.map(p => (
+                        <span key={p.seat_class} style={{
+                          fontSize: '.61rem', padding: '.08rem .35rem', borderRadius: 4, fontWeight: 600,
+                          border: `1px solid ${p.seat_class === 'vip' ? '#fde68a' : p.seat_class === 'business' ? '#bfdbfe' : '#bbf7d0'}`,
+                          color:  p.seat_class === 'vip' ? '#92400e' : p.seat_class === 'business' ? '#1e40af' : '#166534',
+                          background: 'transparent',
+                        }}>
+                          {p.seat_class.toUpperCase()}
+                        </span>
+                      ))}
                     </div>
                   </div>
-                  <div className="d-flex flex-wrap gap-1 align-items-center">
-                    <span className="trip-bus-type">
-                      <i className="bi bi-bus-front me-1" />{trip.bus_name || trip.bus_type}
-                    </span>
-                    {trip.amenities?.slice(0, 3).map(a => (
-                      <span key={a} className="amenity-badge">{a}</span>
-                    ))}
-                    {trip.seat_prices?.map(p => (
-                      <span key={p.seat_class} style={{
-                        fontSize: '.68rem', padding: '.1rem .4rem', borderRadius: 20, fontWeight: 600,
-                        background: p.seat_class === 'vip' ? '#fef9c3'
-                          : p.seat_class === 'business' ? '#dbeafe' : '#dcfce7',
-                        color: p.seat_class === 'vip' ? '#ca8a04'
-                          : p.seat_class === 'business' ? '#2563eb' : '#16a34a',
-                      }}>
-                        {p.seat_class.toUpperCase()} {Number(p.price).toLocaleString()}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
@@ -513,17 +505,19 @@ export default function Results() {
                 {/* Trip header */}
                 <div className="d-flex justify-content-between align-items-center mb-2">
                   <div>
-                    <h6 className="mb-0 fw-700" style={{ fontSize: '.88rem' }}>
-                      <i className="bi bi-bus-front me-1" style={{ color: 'var(--dl-red)' }} />
-                      {selectedTrip.bus_name}
-                    </h6>
-                    <small style={{ color: 'var(--dl-gray)', fontSize: '.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ fontWeight: 800, fontSize: '.92rem', color: '#111' }}>{cap(selectedTrip.origin || origin)}</span>
+                      <i className="bi bi-arrow-right" style={{ color: 'var(--dl-gold)', fontSize: '.72rem' }} />
+                      <span style={{ fontWeight: 800, fontSize: '.92rem', color: '#111' }}>{cap(selectedTrip.destination || destination)}</span>
+                    </div>
+                    <small style={{ color: '#aaa', fontSize: '.7rem' }}>
                       {formatTime(selectedTrip.departure_time)} → {formatTime(selectedTrip.arrival_time)}
+                      &ensp;·&ensp;{selectedTrip.bus_name}
                     </small>
                   </div>
-                  <div className="text-end">
-                    <div style={{ fontSize: '.72rem', color: 'var(--dl-gray)' }}>Selected</div>
-                    <div style={{ fontWeight: 800, color: 'var(--dl-red)', fontSize: '1rem' }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '.65rem', color: '#aaa' }}>Selected</div>
+                    <div style={{ fontWeight: 800, color: 'var(--dl-red)', fontSize: '.92rem' }}>
                       {selectedSeats.length} seat{selectedSeats.length !== 1 ? 's' : ''}
                     </div>
                   </div>
@@ -539,20 +533,16 @@ export default function Results() {
                         fontSize: '.62rem', fontWeight: 700,
                         background: formStep === step ? 'var(--dl-red)'
                           : ['details', 'payment'].indexOf(formStep) > i ? '#16a34a' : 'var(--dl-border)',
-                        color: formStep === step || ['details', 'payment'].indexOf(formStep) > i
-                          ? 'white' : 'var(--dl-gray)',
+                        color: formStep === step || ['details', 'payment'].indexOf(formStep) > i ? 'white' : 'var(--dl-gray)',
                       }}>
                         {['details', 'payment'].indexOf(formStep) > i ? '✓' : i + 1}
                       </div>
                       <span style={{
-                        fontSize: '.72rem',
-                        fontWeight: formStep === step ? 700 : 400,
+                        fontSize: '.72rem', fontWeight: formStep === step ? 700 : 400,
                         color: formStep === step ? 'var(--dl-red)' : 'var(--dl-gray)',
                         textTransform: 'capitalize',
                       }}>{step}</span>
-                      {i < 2 && (
-                        <i className="bi bi-chevron-right" style={{ fontSize: '.55rem', color: 'var(--dl-border)' }} />
-                      )}
+                      {i < 2 && <i className="bi bi-chevron-right" style={{ fontSize: '.55rem', color: 'var(--dl-border)' }} />}
                     </div>
                   ))}
                 </div>
@@ -567,39 +557,20 @@ export default function Results() {
                       </div>
                     ) : tripDetail ? (
                       <>
-                        {/* Live indicator */}
-                        <div style={{
-                          display: 'flex', alignItems: 'center', gap: 6,
-                          fontSize: '.7rem', color: '#16a34a', marginBottom: 8, fontWeight: 600,
-                        }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '.67rem', color: '#16a34a', marginBottom: 8, fontWeight: 600 }}>
                           <span style={{
-                            width: 7, height: 7, borderRadius: '50%', background: '#16a34a',
-                            display: 'inline-block',
-                            boxShadow: '0 0 0 0 rgba(22,163,74,.4)',
-                            animation: 'bsm-pulse 1.5s infinite',
+                            width: 6, height: 6, borderRadius: '50%', background: '#16a34a',
+                            display: 'inline-block', animation: 'bsm-pulse 1.5s infinite',
                           }} />
                           Live seat availability
-                          <style>{`
-                            @keyframes bsm-pulse {
-                              0%   { box-shadow: 0 0 0 0   rgba(22,163,74,.4); }
-                              70%  { box-shadow: 0 0 0 6px rgba(22,163,74,0);  }
-                              100% { box-shadow: 0 0 0 0   rgba(22,163,74,0);  }
-                            }
-                          `}</style>
+                          <style>{`@keyframes bsm-pulse{0%{box-shadow:0 0 0 0 rgba(22,163,74,.4)}70%{box-shadow:0 0 0 6px rgba(22,163,74,0)}100%{box-shadow:0 0 0 0 rgba(22,163,74,0)}}`}</style>
                         </div>
 
-                        {/* Lock error banner */}
                         {lockError && (
-                          <div className="dl-alert dl-alert-error" style={{ marginBottom: 8, fontSize: '.8rem' }}>
+                          <div className="dl-alert dl-alert-error" style={{ marginBottom: 8, fontSize: '.78rem' }}>
                             <i className="bi bi-exclamation-triangle-fill me-1" />
                             {lockError}
-                            <button
-                              onClick={() => setLockError('')}
-                              style={{
-                                background: 'none', border: 'none', marginLeft: 'auto',
-                                cursor: 'pointer', color: 'inherit', padding: 0, float: 'right',
-                              }}
-                            >×</button>
+                            <button onClick={() => setLockError('')} style={{ background: 'none', border: 'none', marginLeft: 'auto', cursor: 'pointer', color: 'inherit', padding: 0, float: 'right' }}>×</button>
                           </div>
                         )}
 
@@ -609,21 +580,18 @@ export default function Results() {
                           selectedSeats={selectedSeats}
                           lockedByOthers={lockedByOthers}
                           onSeatClick={handleSeatClick}
+                          seatPrices={tripDetail.seat_prices || []}
                         />
 
                         {selectedSeats.length > 0 && (
-                          <div style={{
-                            background: '#fff5f5', border: '1px solid #fecaca',
-                            borderRadius: 8, padding: '.85rem', marginTop: '.85rem',
-                          }}>
+                          <div style={{ background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 8, padding: '.85rem', marginTop: '.85rem' }}>
                             <div className="d-flex justify-content-between align-items-center mb-2">
-                              <span style={{ fontWeight: 600, fontSize: '.85rem' }}>Selected Seats:</span>
-                              <span style={{ fontWeight: 800, color: 'var(--dl-red)', fontSize: '1rem' }}>
+                              <span style={{ fontWeight: 600, fontSize: '.83rem' }}>Selected Seats:</span>
+                              <span style={{ fontWeight: 800, color: 'var(--dl-red)', fontSize: '.95rem' }}>
                                 KES {totalAmount.toLocaleString()}
                               </span>
                             </div>
 
-                            {/* Countdown timer */}
                             {minLockRemaining !== null && soonestExpiringSeat && (
                               <div style={{ marginBottom: 10 }}>
                                 <LockCountdown
@@ -639,28 +607,18 @@ export default function Results() {
                                 const seat = tripDetail.bus_layout?.find(s => s.seat_number === n);
                                 return (
                                   <span key={n} style={{
-                                    padding: '.15rem .5rem', borderRadius: 5,
-                                    fontSize: '.75rem', fontWeight: 700,
-                                    background: seat?.seat_class === 'vip'      ? 'var(--seat-vip)'
-                                      : seat?.seat_class === 'business' ? 'var(--seat-business)'
-                                      : 'var(--seat-economy)',
+                                    padding: '.15rem .5rem', borderRadius: 5, fontSize: '.75rem', fontWeight: 700,
+                                    background: seat?.seat_class === 'vip' ? 'var(--seat-vip)'
+                                      : seat?.seat_class === 'business' ? 'var(--seat-business)' : 'var(--seat-economy)',
                                     color: seat?.seat_class === 'vip' ? 'var(--seat-vip-text)' : 'white',
-                                    position: 'relative',
                                   }}>
                                     <i className="bi bi-lock-fill" style={{ fontSize: '.6rem', marginRight: 3, opacity: .7 }} />
                                     {n}
-                                    <button
-                                      onClick={() => handleSeatClick(seat || { seat_number: n })}
-                                      style={{
-                                        background: 'none', border: 'none', color: 'inherit',
-                                        marginLeft: 3, cursor: 'pointer', padding: 0, fontSize: '.8rem',
-                                      }}
-                                    >×</button>
+                                    <button onClick={() => handleSeatClick(seat || { seat_number: n })} style={{ background: 'none', border: 'none', color: 'inherit', marginLeft: 3, cursor: 'pointer', padding: 0, fontSize: '.8rem' }}>×</button>
                                   </span>
                                 );
                               })}
                             </div>
-
                             <button className="btn-dl-primary w-100" onClick={() => setFormStep('details')}>
                               Continue <i className="bi bi-arrow-right ms-1" />
                             </button>
@@ -681,7 +639,6 @@ export default function Results() {
                       </button>
                     </div>
 
-                    {/* Countdown still visible on details step */}
                     {minLockRemaining !== null && soonestExpiringSeat && (
                       <div style={{ marginBottom: 12 }}>
                         <LockCountdown
@@ -695,77 +652,42 @@ export default function Results() {
                     <div className="row g-2">
                       <div className="col-12">
                         <label className="form-label fw-600">Full Name *</label>
-                        <input
-                          className="form-control" placeholder="John Doe"
-                          value={form.name}
-                          onChange={e => setForm({ ...form, name: e.target.value })}
-                        />
+                        <input className="form-control" placeholder="John Doe" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
                       </div>
                       <div className="col-12 col-sm-6">
                         <label className="form-label fw-600">Email *</label>
-                        <input
-                          className="form-control" type="email" placeholder="john@email.com"
-                          value={form.email}
-                          onChange={e => setForm({ ...form, email: e.target.value })}
-                        />
+                        <input className="form-control" type="email" placeholder="john@email.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
                         <small style={{ color: 'var(--dl-gray)', fontSize: '.72rem' }}>Ticket sent here</small>
                       </div>
                       <div className="col-12 col-sm-6">
                         <label className="form-label fw-600">Phone Number *</label>
-                        <input
-                          className="form-control" placeholder="07XX XXX XXX" type="tel"
-                          value={form.phone}
-                          onChange={e => setForm({ ...form, phone: e.target.value })}
-                        />
+                        <input className="form-control" placeholder="07XX XXX XXX" type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
                       </div>
                       <div className="col-12 col-sm-6">
                         <label className="form-label fw-600">ID / Passport *</label>
-                        <input
-                          className="form-control" placeholder="12345678"
-                          value={form.idNumber}
-                          onChange={e => setForm({ ...form, idNumber: e.target.value })}
-                        />
+                        <input className="form-control" placeholder="12345678" value={form.idNumber} onChange={e => setForm({ ...form, idNumber: e.target.value })} />
                       </div>
                       <div className="col-12 col-sm-6">
                         <label className="form-label fw-600">Nationality</label>
-                        <select
-                          className="form-select"
-                          value={form.nationality}
-                          onChange={e => setForm({ ...form, nationality: e.target.value })}
-                        >
-                          <option>Kenyan</option>
-                          <option>Ugandan</option>
-                          <option>Tanzanian</option>
-                          <option>Other</option>
+                        <select className="form-select" value={form.nationality} onChange={e => setForm({ ...form, nationality: e.target.value })}>
+                          <option>Kenyan</option><option>Ugandan</option><option>Tanzanian</option><option>Other</option>
                         </select>
                       </div>
                       {boardingPoints.length > 0 && (
                         <div className="col-12 col-sm-6">
                           <label className="form-label fw-600">Boarding Point</label>
-                          <select
-                            className="form-select"
-                            value={form.boardingPoint}
-                            onChange={e => setForm({ ...form, boardingPoint: e.target.value })}
-                          >
+                          <select className="form-select" value={form.boardingPoint} onChange={e => setForm({ ...form, boardingPoint: e.target.value })}>
                             <option value="">Select boarding point</option>
-                            {boardingPoints.map(b => (
-                              <option key={b.slug} value={b.slug}>{b.name}</option>
-                            ))}
+                            {boardingPoints.map(b => <option key={b.slug} value={b.slug}>{b.name}</option>)}
                           </select>
                         </div>
                       )}
                       {droppingPoints.length > 0 && (
                         <div className="col-12 col-sm-6">
                           <label className="form-label fw-600">Dropping Point</label>
-                          <select
-                            className="form-select"
-                            value={form.droppingPoint}
-                            onChange={e => setForm({ ...form, droppingPoint: e.target.value })}
-                          >
+                          <select className="form-select" value={form.droppingPoint} onChange={e => setForm({ ...form, droppingPoint: e.target.value })}>
                             <option value="">Select dropping point</option>
-                            {droppingPoints.map(d => (
-                              <option key={d.slug} value={d.slug}>{d.name}</option>
-                            ))}
+                            {droppingPoints.map(d => <option key={d.slug} value={d.slug}>{d.name}</option>)}
                           </select>
                         </div>
                       )}
@@ -778,12 +700,9 @@ export default function Results() {
                       </div>
                       <div className="d-flex justify-content-between" style={{ fontSize: '.82rem' }}>
                         <span style={{ color: 'var(--dl-gray)' }}>Total:</span>
-                        <span style={{ fontWeight: 800, color: 'var(--dl-red)', fontSize: '1rem' }}>
-                          KES {totalAmount.toLocaleString()}
-                        </span>
+                        <span style={{ fontWeight: 800, color: 'var(--dl-red)', fontSize: '1rem' }}>KES {totalAmount.toLocaleString()}</span>
                       </div>
                     </div>
-
                     <button className="btn-dl-primary w-100 mt-3" onClick={handleBook}>
                       Confirm Booking <i className="bi bi-check-circle ms-1" />
                     </button>
@@ -797,29 +716,13 @@ export default function Results() {
                       <div>
                         <div style={{ fontSize: '3rem', marginBottom: '.75rem' }}>🎉</div>
                         <h4 style={{ color: '#16a34a', fontWeight: 800, fontSize: '1.1rem' }}>Booking Confirmed!</h4>
-                        <p style={{ color: 'var(--dl-gray)', fontSize: '.85rem' }}>
-                          Your ticket has been sent to <strong>{form.email}</strong>
-                        </p>
-                        <div style={{
-                          background: '#dcfce7', borderRadius: 8,
-                          padding: '.85rem', margin: '.85rem 0',
-                        }}>
-                          <div style={{ fontWeight: 700, fontSize: '.82rem', color: '#16a34a' }}>
-                            Booking Reference
-                          </div>
-                          <div style={{ fontWeight: 900, fontSize: '1.25rem', letterSpacing: 2 }}>
-                            {booking.reference}
-                          </div>
-                          {paymentStatus.receipt && (
-                            <div style={{ fontSize: '.8rem', color: '#16a34a', marginTop: 3 }}>
-                              M-Pesa: {paymentStatus.receipt}
-                            </div>
-                          )}
+                        <p style={{ color: 'var(--dl-gray)', fontSize: '.85rem' }}>Your ticket has been sent to <strong>{form.email}</strong></p>
+                        <div style={{ background: '#dcfce7', borderRadius: 8, padding: '.85rem', margin: '.85rem 0' }}>
+                          <div style={{ fontWeight: 700, fontSize: '.82rem', color: '#16a34a' }}>Booking Reference</div>
+                          <div style={{ fontWeight: 900, fontSize: '1.25rem', letterSpacing: 2 }}>{booking.reference}</div>
+                          {paymentStatus.receipt && <div style={{ fontSize: '.8rem', color: '#16a34a', marginTop: 3 }}>M-Pesa: {paymentStatus.receipt}</div>}
                         </div>
-                        <button
-                          className="btn-dl-primary"
-                          onClick={() => navigate(`/track/${booking.reference}`)}
-                        >
+                        <button className="btn-dl-primary" onClick={() => navigate(`/track/${booking.reference}`)}>
                           <i className="bi bi-ticket-perforated me-2" />View Ticket
                         </button>
                       </div>
@@ -828,58 +731,28 @@ export default function Results() {
                         <div style={{ fontSize: '2.5rem', marginBottom: '.5rem' }}>📱</div>
                         <h5 className="fw-700 mb-1" style={{ fontSize: '.95rem' }}>Pay with M-Pesa</h5>
                         <p style={{ color: 'var(--dl-gray)', fontSize: '.82rem', marginBottom: '1.25rem' }}>
-                          Ref: <strong>{booking.reference}</strong> | Total:{' '}
-                          <strong style={{ color: 'var(--dl-red)' }}>KES {totalAmount.toLocaleString()}</strong>
+                          Ref: <strong>{booking.reference}</strong> | Total: <strong style={{ color: 'var(--dl-red)' }}>KES {totalAmount.toLocaleString()}</strong>
                         </p>
-
-                        {paymentError && (
-                          <div className="dl-alert dl-alert-error">
-                            <i className="bi bi-exclamation-circle-fill" />{paymentError}
-                          </div>
-                        )}
-
+                        {paymentError && <div className="dl-alert dl-alert-error"><i className="bi bi-exclamation-circle-fill" />{paymentError}</div>}
                         {!polling ? (
                           <>
                             <div className="mb-3">
-                              <label className="form-label fw-600" style={{ fontSize: '.82rem' }}>
-                                M-Pesa Phone Number
-                              </label>
-                              <input
-                                className="form-control"
-                                placeholder="e.g. 0712 345 678"
-                                value={paymentPhone}
-                                onChange={e => setPaymentPhone(e.target.value)}
-                                type="tel"
-                                style={{ textAlign: 'center', fontSize: '1rem', fontWeight: 600, letterSpacing: 1 }}
-                              />
-                              <small style={{ color: 'var(--dl-gray)', fontSize: '.72rem' }}>
-                                You'll receive an STK push on this number
-                              </small>
+                              <label className="form-label fw-600" style={{ fontSize: '.82rem' }}>M-Pesa Phone Number</label>
+                              <input className="form-control" placeholder="e.g. 0712 345 678" value={paymentPhone} onChange={e => setPaymentPhone(e.target.value)} type="tel" style={{ textAlign: 'center', fontSize: '1rem', fontWeight: 600, letterSpacing: 1 }} />
+                              <small style={{ color: 'var(--dl-gray)', fontSize: '.72rem' }}>You'll receive an STK push on this number</small>
                             </div>
-                            <button
-                              className="btn-dl-gold w-100"
-                              onClick={handlePayment}
-                              disabled={paymentLoading}
-                            >
-                              {paymentLoading ? (
-                                <div className="payment-spinner" style={{ width: 18, height: 18, margin: '0 auto', borderWidth: 2 }} />
-                              ) : (
-                                <><i className="bi bi-phone-fill me-2" />Pay KES {totalAmount.toLocaleString()}</>
-                              )}
+                            <button className="btn-dl-gold w-100" onClick={handlePayment} disabled={paymentLoading}>
+                              {paymentLoading
+                                ? <div className="payment-spinner" style={{ width: 18, height: 18, margin: '0 auto', borderWidth: 2 }} />
+                                : <><i className="bi bi-phone-fill me-2" />Pay KES {totalAmount.toLocaleString()}</>}
                             </button>
                           </>
                         ) : (
                           <div>
                             <div className="payment-spinner mx-auto" />
                             <h6 className="mt-2 fw-700" style={{ fontSize: '.88rem' }}>Enter PIN on your phone</h6>
-                            <p style={{ color: 'var(--dl-gray)', fontSize: '.8rem' }}>
-                              Waiting for M-Pesa confirmation...
-                            </p>
-                            {paymentStatus && (
-                              <div style={{ fontSize: '.78rem', color: 'var(--dl-gray)' }}>
-                                Status: {paymentStatus.payment_status}
-                              </div>
-                            )}
+                            <p style={{ color: 'var(--dl-gray)', fontSize: '.8rem' }}>Waiting for M-Pesa confirmation...</p>
+                            {paymentStatus && <div style={{ fontSize: '.78rem', color: 'var(--dl-gray)' }}>Status: {paymentStatus.payment_status}</div>}
                           </div>
                         )}
                       </div>

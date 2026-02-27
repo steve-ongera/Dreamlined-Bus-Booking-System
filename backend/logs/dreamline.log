@@ -30,3 +30,9 @@ INFO 2026-02-27 13:01:41,879 views M-Pesa STK response status: 200
 INFO 2026-02-27 13:01:41,880 views M-Pesa STK response body: {'MerchantRequestID': '01e8-4775-be18-83fb710a79a79915', 'CheckoutRequestID': 'ws_CO_27022026130143500757790687', 'ResponseCode': '0', 'ResponseDescription': 'Success. Request accepted for processing', 'CustomerMessage': 'Success. Request accepted for processing'}
 INFO 2026-02-27 13:01:57,168 views M-Pesa callback: ResultCode=1037 CheckoutID=ws_CO_27022026130143500757790687
 INFO 2026-02-27 13:01:57,571 views Payment failed: DS timeout user cannot be reached.
+INFO 2026-02-27 21:12:17,916 views M-Pesa token response status: 200
+INFO 2026-02-27 21:12:17,936 views M-Pesa STK push payload for DLDD9648B4: phone=254757790687, amount=2, shortcode=174379
+INFO 2026-02-27 21:12:29,197 views M-Pesa STK response status: 200
+INFO 2026-02-27 21:12:29,197 views M-Pesa STK response body: {'MerchantRequestID': 'c35f-4cce-81a6-ad6a25b3e59c13343', 'CheckoutRequestID': 'ws_CO_27022026211231191757790687', 'ResponseCode': '0', 'ResponseDescription': 'Success. Request accepted for processing', 'CustomerMessage': 'Success. Request accepted for processing'}
+INFO 2026-02-27 21:12:43,013 views M-Pesa callback: ResultCode=0 CheckoutID=ws_CO_27022026211231191757790687
+INFO 2026-02-27 21:12:47,297 views Payment completed for DLDD9648B4
