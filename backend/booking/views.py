@@ -591,6 +591,28 @@ class SeatLockView(APIView):
         })
 
 
+class SeatLockCleanupView(APIView):
+    """
+    POST /api/v1/seat-locks/cleanup/
+    Deletes all expired seat locks globally. 
+    Call this from frontend on page load + every 60s.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        SeatLock.cleanup_expired()  # uses your existing classmethod
+        
+        # Return current lock stats (useful for debugging)
+        active_locks = SeatLock.objects.filter(
+            expires_at__gt=timezone.now()
+        ).values('trip_id', 'seat__seat_number', 'session_key', 'expires_at')
+        
+        return Response({
+            'status': 'ok',
+            'active_locks_remaining': active_locks.count(),
+        })
+
 class SeatStatusView(APIView):
     """
     GET /api/v1/trips/<trip_slug>/seat-status/

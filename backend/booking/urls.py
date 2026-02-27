@@ -10,7 +10,7 @@ from .views import (
     # Payment APIViews
     PaymentInitiateView, PaymentCallbackView, PaymentStatusView,
     # Seat locking
-    SeatLockView, SeatStatusView,
+    SeatLockView, SeatStatusView,SeatLockCleanupView,
     # Admin
     AdminLoginView, AdminMeView, AdminUserViewSet,
     DashboardView, RevenueChartView, BookingsByRouteView,
@@ -66,6 +66,7 @@ urlpatterns = [
     # Real-time seat locking
     path('trips/<slug:trip_slug>/lock-seats/',  SeatLockView.as_view(),         name='seat-lock'),
     path('trips/<slug:trip_slug>/seat-status/', SeatStatusView.as_view(),       name='seat-status'),
+    path('seat-locks/cleanup/', SeatLockCleanupView.as_view(), name='seat-lock-cleanup'),
 
     # Public router  →  /api/v1/...
     path('', include(public_router.urls)),

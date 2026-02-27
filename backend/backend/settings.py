@@ -8,7 +8,7 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-c&_rsqw_oa!xf4w_u%8o9
 
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=Csv())
+ALLOWED_HOSTS = ['192.168.100.4', 'localhost', '127.0.0.1', '*']
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -84,7 +84,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ── REST Framework ────────────────────────────────────────────────────────────
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+        'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -106,7 +106,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "https://dreamline.co.ke",
     "https://www.dreamline.co.ke",
-    'http://192.168.100.3:5173',
+    'http://192.168.100.4:5173',
     'https://d082-2c0f-6300-d09-fd00-ecf6-3cb3-9e9c-6b3c.ngrok-free.app',
 ]
 CORS_ALLOW_CREDENTIALS = True

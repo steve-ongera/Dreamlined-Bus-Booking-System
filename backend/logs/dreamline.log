@@ -18,3 +18,15 @@ INFO 2026-02-27 12:21:43,049 views M-Pesa token response status: 200
 INFO 2026-02-27 12:21:43,051 views M-Pesa STK push payload for DL0F0D67A3: phone=254757790687, amount=2500, shortcode=174379
 INFO 2026-02-27 12:21:44,362 views M-Pesa STK response status: 200
 INFO 2026-02-27 12:21:44,363 views M-Pesa STK response body: {'MerchantRequestID': 'c35f-4cce-81a6-ad6a25b3e59c6934', 'CheckoutRequestID': 'ws_CO_27022026122145933757790687', 'ResponseCode': '0', 'ResponseDescription': 'Success. Request accepted for processing', 'CustomerMessage': 'Success. Request accepted for processing'}
+INFO 2026-02-27 13:00:19,511 views M-Pesa token response status: 200
+INFO 2026-02-27 13:00:19,536 views M-Pesa STK push payload for DLB05CD89B: phone=254757790687, amount=2500, shortcode=174379
+INFO 2026-02-27 13:00:24,582 views M-Pesa STK response status: 200
+INFO 2026-02-27 13:00:24,583 views M-Pesa STK response body: {'MerchantRequestID': 'c35f-4cce-81a6-ad6a25b3e59c7435', 'CheckoutRequestID': 'ws_CO_27022026130022716757790687', 'ResponseCode': '0', 'ResponseDescription': 'Success. Request accepted for processing', 'CustomerMessage': 'Success. Request accepted for processing'}
+INFO 2026-02-27 13:00:41,079 views M-Pesa callback: ResultCode=1 CheckoutID=ws_CO_27022026130022716757790687
+INFO 2026-02-27 13:00:41,360 views Payment failed: The balance is insufficient for the transaction.
+INFO 2026-02-27 13:01:40,637 views M-Pesa token response status: 200
+INFO 2026-02-27 13:01:40,641 views M-Pesa STK push payload for DL1B6C2E9D: phone=254757790687, amount=2500, shortcode=174379
+INFO 2026-02-27 13:01:41,879 views M-Pesa STK response status: 200
+INFO 2026-02-27 13:01:41,880 views M-Pesa STK response body: {'MerchantRequestID': '01e8-4775-be18-83fb710a79a79915', 'CheckoutRequestID': 'ws_CO_27022026130143500757790687', 'ResponseCode': '0', 'ResponseDescription': 'Success. Request accepted for processing', 'CustomerMessage': 'Success. Request accepted for processing'}
+INFO 2026-02-27 13:01:57,168 views M-Pesa callback: ResultCode=1037 CheckoutID=ws_CO_27022026130143500757790687
+INFO 2026-02-27 13:01:57,571 views Payment failed: DS timeout user cannot be reached.
