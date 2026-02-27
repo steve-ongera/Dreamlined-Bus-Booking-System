@@ -659,3 +659,23 @@ class JobPostingAdmin(admin.ModelAdmin):
             'classes': ('collapse',),
         }),
     )
+    
+    
+from django.contrib import admin
+from .models import (
+    City, BusType, Bus, SeatLayout, Route, BoardingPoint, Trip,
+    SeatPrice, Booking, BookedSeat, Payment, JobPosting, SeatLock
+)
+
+@admin.register(SeatLock)
+class SeatLockAdmin(admin.ModelAdmin):
+    list_display = ('trip', 'seat', 'session_key', 'locked_at', 'expires_at', 'is_expired')
+    list_filter = ('trip', 'locked_at', 'expires_at')
+    search_fields = ('session_key', 'seat__seat_number', 'trip__slug')
+    readonly_fields = ('locked_at',)
+    ordering = ('-locked_at',)
+
+    def is_expired(self, obj):
+        return obj.is_expired
+    is_expired.boolean = True
+    is_expired.short_description = "Expired?"

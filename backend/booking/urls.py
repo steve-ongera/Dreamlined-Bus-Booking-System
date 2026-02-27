@@ -7,7 +7,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     CityViewSet, BusTypeViewSet, BusViewSet, RouteViewSet,
     BoardingPointViewSet, TripViewSet, BookingViewSet,
-    PaymentViewSet, JobPostingViewSet,
+    PaymentViewSet, JobPostingViewSet, SeatLockView, SeatStatusView,
 )
 
 # ── Admin views ───────────────────────────────────────────────────────────────
@@ -46,17 +46,25 @@ admin_router.register(r'jobs',            AdminJobPostingViewSet,    basename='a
 
 # ── Admin URL patterns ────────────────────────────────────────────────────────
 admin_urlpatterns = [
-    path('auth/login/',              AdminLoginView.as_view(),        name='admin-login'),
-    path('auth/refresh/',            TokenRefreshView.as_view(),      name='admin-token-refresh'),
-    path('auth/me/',                 AdminMeView.as_view(),           name='admin-me'),
-    path('dashboard/stats/',         DashboardView.as_view(),         name='admin-dashboard-stats'),
-    path('dashboard/revenue-chart/', RevenueChartView.as_view(),      name='admin-revenue-chart'),
-    path('dashboard/bookings-by-route/', BookingsByRouteView.as_view(), name='admin-bookings-by-route'),
+    path('auth/login/',                  AdminLoginView.as_view(),           name='admin-login'),
+    path('auth/refresh/',                TokenRefreshView.as_view(),         name='admin-token-refresh'),
+    path('auth/me/',                     AdminMeView.as_view(),              name='admin-me'),
+    path('dashboard/stats/',             DashboardView.as_view(),            name='admin-dashboard-stats'),
+    path('dashboard/revenue-chart/',     RevenueChartView.as_view(),         name='admin-revenue-chart'),
+    path('dashboard/bookings-by-route/', BookingsByRouteView.as_view(),      name='admin-bookings-by-route'),
     path('', include(admin_router.urls)),
 ]
 
 # ── Root urlpatterns ──────────────────────────────────────────────────────────
 urlpatterns = [
-    path('admin-api/', include(admin_urlpatterns)),   # → /api/v1/admin-api/...
-    path('', include(public_router.urls)),            # → /api/v1/...
+    # Admin API  →  /api/v1/admin-api/...
+    path('admin-api/', include(admin_urlpatterns)),
+
+    # Seat lock / real-time status  →  /api/v1/trips/<slug>/lock-seats/
+    #                                   /api/v1/trips/<slug>/seat-status/
+    path('trips/<slug:trip_slug>/lock-seats/',  SeatLockView.as_view(),  name='seat-lock'),
+    path('trips/<slug:trip_slug>/seat-status/', SeatStatusView.as_view(), name='seat-status'),
+
+    # Public router  →  /api/v1/...
+    path('', include(public_router.urls)),
 ]

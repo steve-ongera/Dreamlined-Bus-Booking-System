@@ -132,6 +132,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "https://dreamline.co.ke",
     "https://www.dreamline.co.ke",
+    'http://192.168.100.3:5173',
+    'https://84d6-2c0f-6300-d09-fd00-ecf6-3cb3-9e9c-6b3c.ngrok-free.app',
 ]
 CORS_ALLOW_CREDENTIALS = True
 
@@ -155,7 +157,7 @@ MPESA_CONSUMER_KEY = os.environ.get('MPESA_CONSUMER_KEY', '')
 MPESA_CONSUMER_SECRET = os.environ.get('MPESA_CONSUMER_SECRET', '')
 MPESA_SHORTCODE = os.environ.get('MPESA_SHORTCODE', '174379')  # sandbox shortcode
 MPESA_PASSKEY = os.environ.get('MPESA_PASSKEY', '')
-MPESA_CALLBACK_URL = os.environ.get('MPESA_CALLBACK_URL', 'https://your-domain.co.ke/api/v1/payments/callback/')
+MPESA_CALLBACK_URL = os.environ.get('MPESA_CALLBACK_URL', 'https://84d6-2c0f-6300-d09-fd00-ecf6-3cb3-9e9c-6b3c.ngrok-free.app/api/v1/payments/callback/')
 MPESA_ENVIRONMENT = os.environ.get('MPESA_ENVIRONMENT', 'sandbox')  # 'sandbox' or 'production'
 
 # Logging

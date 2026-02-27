@@ -1,7 +1,7 @@
 /*
-Results.jsx
+Results.jsx  –  with real-time seat locking (5-min hold + live poll)
 */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   searchTrips, getTripDetail, getBoardingPoints,
@@ -9,23 +9,102 @@ import {
 } from '../services/api';
 import BusSeatMap from '../components/BusSeatMap';
 
+// ── Seat lock API helpers (add these to services/api.js too) ─────────────────
+const BASE = import.meta.env.VITE_API_BASE || '';
+
+async function lockSeats(tripSlug, seatNumbers, action = 'lock') {
+  const res = await fetch(`${BASE}/api/v1/trips/${tripSlug}/lock-seats/`, {
+    method: 'POST',
+    credentials: 'include',          // needed for session cookie
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ seat_numbers: seatNumbers, action }),
+  });
+  return res.json();
+}
+
+async function getSeatStatus(tripSlug) {
+  const res = await fetch(`${BASE}/api/v1/trips/${tripSlug}/seat-status/`, {
+    credentials: 'include',
+  });
+  return res.json();
+}
+
+// ── Countdown display ────────────────────────────────────────────────────────
+function LockCountdown({ seconds, onExpire }) {
+  const [remaining, setRemaining] = useState(seconds);
+
+  useEffect(() => {
+    setRemaining(seconds);
+  }, [seconds]);
+
+  useEffect(() => {
+    if (remaining <= 0) { onExpire(); return; }
+    const t = setTimeout(() => setRemaining(r => r - 1), 1000);
+    return () => clearTimeout(t);
+  }, [remaining]);
+
+  const mins = Math.floor(remaining / 60);
+  const secs = remaining % 60;
+  const pct  = Math.min(100, (remaining / 300) * 100);
+  const urgent = remaining <= 60;
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      background: urgent ? '#fff5f5' : '#f0fdf4',
+      border: `1px solid ${urgent ? '#fecaca' : '#bbf7d0'}`,
+      borderRadius: 8, padding: '.45rem .75rem',
+      fontSize: '.78rem', fontWeight: 600,
+    }}>
+      <i className={`bi ${urgent ? 'bi-exclamation-triangle-fill' : 'bi-lock-fill'}`}
+        style={{ color: urgent ? '#dc2626' : '#16a34a', fontSize: '.8rem' }}></i>
+      <span style={{ color: urgent ? '#dc2626' : '#15803d' }}>
+        Seats held for{' '}
+        <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {mins}:{String(secs).padStart(2, '0')}
+        </strong>
+      </span>
+      {/* Progress bar */}
+      <div style={{
+        flex: 1, height: 4, background: urgent ? '#fecaca' : '#d1fae5',
+        borderRadius: 2, overflow: 'hidden', minWidth: 40,
+      }}>
+        <div style={{
+          height: '100%', width: `${pct}%`,
+          background: urgent ? '#dc2626' : '#16a34a',
+          transition: 'width 1s linear',
+        }} />
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 export default function Results() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const origin = searchParams.get('origin') || '';
+  const origin      = searchParams.get('origin') || '';
   const destination = searchParams.get('destination') || '';
-  const date = searchParams.get('date') || '';
+  const date        = searchParams.get('date') || '';
 
-  const [trips, setTrips] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [trips, setTrips]               = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState('');
 
-  const [selectedTrip, setSelectedTrip] = useState(null);
-  const [tripDetail, setTripDetail] = useState(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [selectedTrip, setSelectedTrip]     = useState(null);
+  const [tripDetail, setTripDetail]         = useState(null);
+  const [loadingDetail, setLoadingDetail]   = useState(false);
 
-  const [selectedSeats, setSelectedSeats] = useState([]);
+  const [selectedSeats, setSelectedSeats]   = useState([]);
+
+  // Real-time seat status
+  const [bookedSeats, setBookedSeats]           = useState([]);
+  const [lockedByOthers, setLockedByOthers]     = useState([]);
+  const [myLocks, setMyLocks]                   = useState({});   // { "1A": secondsRemaining }
+  const [lockError, setLockError]               = useState('');
+  const pollRef = useRef(null);
+
   const [boardingPoints, setBoardingPoints] = useState([]);
   const [droppingPoints, setDroppingPoints] = useState([]);
 
@@ -35,13 +114,14 @@ export default function Results() {
   });
   const [formStep, setFormStep] = useState('seats');
 
-  const [booking, setBooking] = useState(null);
-  const [paymentPhone, setPaymentPhone] = useState('');
+  const [booking, setBooking]             = useState(null);
+  const [paymentPhone, setPaymentPhone]   = useState('');
   const [paymentLoading, setPaymentLoading] = useState(false);
-  const [paymentError, setPaymentError] = useState('');
+  const [paymentError, setPaymentError]   = useState('');
   const [paymentStatus, setPaymentStatus] = useState(null);
-  const [polling, setPolling] = useState(false);
+  const [polling, setPolling]             = useState(false);
 
+  // ── Load trips ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!origin || !destination || !date) { navigate('/'); return; }
     setLoading(true);
@@ -51,35 +131,125 @@ export default function Results() {
       .finally(() => setLoading(false));
   }, [origin, destination, date]);
 
+  // ── Live seat status polling ────────────────────────────────────────────────
+  const fetchSeatStatus = useCallback(async (tripSlug) => {
+    try {
+      const st = await getSeatStatus(tripSlug);
+      setBookedSeats(st.booked || []);
+      setLockedByOthers(st.locked_by_others || []);
+      setMyLocks(st.my_locks || {});
+
+      // If any of MY selected seats were taken while I was viewing, deselect them
+      setSelectedSeats(prev => {
+        const nowUnavailable = [
+          ...(st.booked || []),
+          ...(st.locked_by_others || []),
+        ];
+        const safe = prev.filter(n => !nowUnavailable.includes(n));
+        if (safe.length !== prev.length) {
+          setLockError('One or more of your selected seats was taken by another passenger.');
+        }
+        return safe;
+      });
+    } catch {}
+  }, []);
+
+  const startPolling = useCallback((tripSlug) => {
+    stopPolling();
+    fetchSeatStatus(tripSlug);
+    pollRef.current = setInterval(() => fetchSeatStatus(tripSlug), 3000);
+  }, [fetchSeatStatus]);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => () => stopPolling(), [stopPolling]);
+
+  // ── Select a trip ───────────────────────────────────────────────────────────
   const handleSelectTrip = async (trip) => {
+    stopPolling();
+    // Release any previous locks
+    if (selectedTrip && selectedSeats.length > 0) {
+      await lockSeats(selectedTrip.slug, selectedSeats, 'release').catch(() => {});
+    }
+
     setSelectedTrip(trip);
     setSelectedSeats([]);
+    setMyLocks({});
+    setLockedByOthers([]);
+    setBookedSeats([]);
+    setLockError('');
     setTripDetail(null);
     setFormStep('seats');
     setLoadingDetail(true);
+
     try {
       const detail = await getTripDetail(trip.slug);
       setTripDetail(detail);
+      setBookedSeats(detail.booked_seat_numbers || []);
+
       const bp = await getBoardingPoints(origin);
       const dp = await getBoardingPoints(destination);
       setBoardingPoints(bp.results || bp);
       setDroppingPoints(dp.results || dp);
+
+      startPolling(trip.slug);
     } catch {
       setError('Failed to load seat details.');
     } finally {
       setLoadingDetail(false);
     }
+
     setTimeout(() => document.getElementById('seat-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
   };
 
-  const handleSeatClick = (seat) => {
-    setSelectedSeats(prev =>
-      prev.includes(seat.seat_number)
-        ? prev.filter(n => n !== seat.seat_number)
-        : [...prev, seat.seat_number]
-    );
+  // ── Seat click → lock immediately ──────────────────────────────────────────
+  const handleSeatClick = async (seat) => {
+    if (!selectedTrip) return;
+    const num = seat.seat_number;
+    setLockError('');
+
+    const isCurrentlySelected = selectedSeats.includes(num);
+
+    if (isCurrentlySelected) {
+      // DESELECT — release lock
+      const next = selectedSeats.filter(n => n !== num);
+      setSelectedSeats(next);
+      await lockSeats(selectedTrip.slug, [num], 'release').catch(() => {});
+    } else {
+      // SELECT — try to lock
+      const res = await lockSeats(selectedTrip.slug, [num], 'lock');
+      if (res.locked) {
+        setSelectedSeats(prev => [...prev, num]);
+        // Update my lock countdown from response
+        setMyLocks(prev => ({
+          ...prev,
+          [num]: res.expires_in_seconds,
+        }));
+      } else {
+        setLockError(
+          res.locked?.length === 0
+            ? `Seat ${num} was just taken by another passenger.`
+            : res.error || `Could not lock seat ${num}. Try another.`
+        );
+        // Refresh status immediately
+        fetchSeatStatus(selectedTrip.slug);
+      }
+    }
   };
 
+  // ── Lock expires for one of my seats ───────────────────────────────────────
+  const handleLockExpired = async (seatNumber) => {
+    setSelectedSeats(prev => prev.filter(n => n !== seatNumber));
+    setMyLocks(prev => { const next = { ...prev }; delete next[seatNumber]; return next; });
+    setLockError(`Your hold on seat ${seatNumber} expired. Please select it again.`);
+    await lockSeats(selectedTrip.slug, [seatNumber], 'release').catch(() => {});
+    fetchSeatStatus(selectedTrip.slug);
+  };
+
+  // ── Pricing ─────────────────────────────────────────────────────────────────
   const getSeatPrice = (seatNumber) => {
     if (!tripDetail) return 0;
     const seat = tripDetail.bus_layout?.find(s => s.seat_number === seatNumber);
@@ -87,9 +257,9 @@ export default function Results() {
     const price = tripDetail.seat_prices?.find(p => p.seat_class === seat.seat_class);
     return price ? Number(price.price) : 0;
   };
-
   const totalAmount = selectedSeats.reduce((sum, n) => sum + getSeatPrice(n), 0);
 
+  // ── Book ────────────────────────────────────────────────────────────────────
   const handleBook = async () => {
     const { name, email, phone, idNumber, nationality, boardingPoint, droppingPoint } = form;
     if (!name || !email || !phone || !idNumber) {
@@ -109,12 +279,16 @@ export default function Results() {
       });
       setBooking(data);
       setFormStep('payment');
+      stopPolling();
+      // Locks are now converted to a real pending booking — release them
+      await lockSeats(selectedTrip.slug, selectedSeats, 'release').catch(() => {});
     } catch (err) {
       const msg = err.response?.data;
       alert(typeof msg === 'object' ? JSON.stringify(msg) : 'Booking failed. Try again.');
     }
   };
 
+  // ── Payment ─────────────────────────────────────────────────────────────────
   const handlePayment = async () => {
     if (!paymentPhone) { setPaymentError('Enter your M-Pesa phone number.'); return; }
     setPaymentLoading(true);
@@ -154,6 +328,17 @@ export default function Results() {
     if (!d) return '';
     return new Date(d).toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   };
+
+  // Minimum lock remaining across all my selected seats
+  const minLockRemaining = selectedSeats.length > 0
+    ? Math.min(...selectedSeats.map(n => myLocks[n] ?? 300))
+    : null;
+
+  // The seat that will expire first (for the countdown display)
+  const soonestExpiringSeat = selectedSeats.reduce((min, n) => {
+    const t = myLocks[n] ?? 300;
+    return (!min || t < (myLocks[min] ?? 300)) ? n : min;
+  }, null);
 
   return (
     <div style={{ background: '#f5f5f7', minHeight: '100vh', paddingBottom: '2rem' }}>
@@ -241,7 +426,6 @@ export default function Results() {
                       </div>
                     </div>
                   </div>
-
                   <div className="d-flex flex-wrap gap-1 align-items-center">
                     <span className="trip-bus-type">
                       <i className="bi bi-bus-front me-1"></i>{trip.bus_name || trip.bus_type}
@@ -316,7 +500,7 @@ export default function Results() {
                   ))}
                 </div>
 
-                {/* Step: Seat selection */}
+                {/* ── Step: Seat selection ── */}
                 {formStep === 'seats' && (
                   <>
                     {loadingDetail ? (
@@ -326,10 +510,38 @@ export default function Results() {
                       </div>
                     ) : tripDetail ? (
                       <>
+                        {/* Live indicator */}
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 6,
+                          fontSize: '.7rem', color: '#16a34a', marginBottom: 8, fontWeight: 600,
+                        }}>
+                          <span style={{
+                            width: 7, height: 7, borderRadius: '50%', background: '#16a34a',
+                            display: 'inline-block',
+                            boxShadow: '0 0 0 0 rgba(22,163,74,.4)',
+                            animation: 'bsm-pulse 1.5s infinite',
+                          }}></span>
+                          Live seat availability
+                          <style>{`@keyframes bsm-pulse{0%{box-shadow:0 0 0 0 rgba(22,163,74,.4)}70%{box-shadow:0 0 0 6px rgba(22,163,74,0)}100%{box-shadow:0 0 0 0 rgba(22,163,74,0)}}`}</style>
+                        </div>
+
+                        {/* Lock error banner */}
+                        {lockError && (
+                          <div className="dl-alert dl-alert-error" style={{ marginBottom: 8, fontSize: '.8rem' }}>
+                            <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                            {lockError}
+                            <button
+                              onClick={() => setLockError('')}
+                              style={{ background: 'none', border: 'none', marginLeft: 'auto', cursor: 'pointer', color: 'inherit', padding: 0, float: 'right' }}
+                            >×</button>
+                          </div>
+                        )}
+
                         <BusSeatMap
                           seats={tripDetail.bus_layout || []}
-                          bookedSeats={tripDetail.booked_seat_numbers || []}
+                          bookedSeats={[...bookedSeats, ...lockedByOthers]}
                           selectedSeats={selectedSeats}
+                          lockedByOthers={lockedByOthers}
                           onSeatClick={handleSeatClick}
                         />
 
@@ -344,19 +556,34 @@ export default function Results() {
                                 KES {totalAmount.toLocaleString()}
                               </span>
                             </div>
+
+                            {/* Countdown timer */}
+                            {minLockRemaining !== null && soonestExpiringSeat && (
+                              <div style={{ marginBottom: 10 }}>
+                                <LockCountdown
+                                  key={soonestExpiringSeat}
+                                  seconds={minLockRemaining}
+                                  onExpire={() => handleLockExpired(soonestExpiringSeat)}
+                                />
+                              </div>
+                            )}
+
                             <div className="d-flex flex-wrap gap-1 mb-3">
                               {selectedSeats.map(n => {
                                 const seat = tripDetail.bus_layout?.find(s => s.seat_number === n);
+                                const remaining = myLocks[n];
                                 return (
                                   <span key={n} style={{
                                     padding: '.15rem .5rem', borderRadius: 5, fontSize: '.75rem', fontWeight: 700,
                                     background: seat?.seat_class === 'vip' ? 'var(--seat-vip)' :
                                       seat?.seat_class === 'business' ? 'var(--seat-business)' : 'var(--seat-economy)',
                                     color: seat?.seat_class === 'vip' ? 'var(--seat-vip-text)' : 'white',
+                                    position: 'relative',
                                   }}>
+                                    <i className="bi bi-lock-fill" style={{ fontSize: '.6rem', marginRight: 3, opacity: .7 }}></i>
                                     {n}
                                     <button
-                                      onClick={() => setSelectedSeats(prev => prev.filter(s => s !== n))}
+                                      onClick={() => handleSeatClick(seat || { seat_number: n })}
                                       style={{ background: 'none', border: 'none', color: 'inherit', marginLeft: 3, cursor: 'pointer', padding: 0, fontSize: '.8rem' }}
                                     >×</button>
                                   </span>
@@ -373,15 +600,26 @@ export default function Results() {
                   </>
                 )}
 
-                {/* Step: Passenger details */}
+                {/* ── Step: Passenger details ── */}
                 {formStep === 'details' && (
                   <div className="booking-form-card">
-                    <div className="d-flex justify-content-between align-items-center mb-3">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
                       <h6 className="mb-0 fw-700" style={{ fontSize: '.88rem' }}>Passenger Details</h6>
                       <button className="btn-dl-outline" onClick={() => setFormStep('seats')}>
                         <i className="bi bi-arrow-left me-1"></i>Back
                       </button>
                     </div>
+
+                    {/* Countdown still visible on details step */}
+                    {minLockRemaining !== null && soonestExpiringSeat && (
+                      <div style={{ marginBottom: 12 }}>
+                        <LockCountdown
+                          key={`details-${soonestExpiringSeat}`}
+                          seconds={minLockRemaining}
+                          onExpire={() => { handleLockExpired(soonestExpiringSeat); setFormStep('seats'); }}
+                        />
+                      </div>
+                    )}
 
                     <div className="row g-2">
                       <div className="col-12">
@@ -437,7 +675,6 @@ export default function Results() {
                       )}
                     </div>
 
-                    {/* Summary */}
                     <div style={{ background: '#f8f9fa', borderRadius: 8, padding: '.85rem', marginTop: '.85rem' }}>
                       <div className="d-flex justify-content-between mb-1" style={{ fontSize: '.82rem' }}>
                         <span style={{ color: 'var(--dl-gray)' }}>Seats:</span>
@@ -457,7 +694,7 @@ export default function Results() {
                   </div>
                 )}
 
-                {/* Step: Payment */}
+                {/* ── Step: Payment ── */}
                 {formStep === 'payment' && booking && (
                   <div className="booking-form-card text-center">
                     {paymentStatus?.booking_status === 'confirmed' ? (

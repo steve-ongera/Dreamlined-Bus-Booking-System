@@ -1,7 +1,7 @@
 /*
 Home.jsx
 */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCities } from '../services/api';
 import SEOHead from '../components/SEOHead';
@@ -30,6 +30,131 @@ const TESTIMONIALS = [
   { name: 'Mary Njeri', route: 'Mombasa → Nairobi', text: 'Traveled with my two kids and the staff was so helpful. The bus had USB charging, which kept my children entertained the whole journey. Amazing service!', stars: 5, avatar: 'https://images.unsplash.com/photo-1589156280159-27698a70f29e?w=80&auto=format&q=80' },
 ];
 
+// ── CityAutocomplete ─────────────────────────────────────────────────────────
+function CityAutocomplete({ cities, value, onChange, placeholder, id }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const wrapRef = useRef(null);
+
+  // Sync display text when value changes externally (e.g. swap button)
+  useEffect(() => {
+    const city = cities.find(c => c.slug === value);
+    setQuery(city ? city.name : '');
+  }, [value, cities]);
+
+  const filtered = query.trim().length === 0
+    ? cities.slice(0, 8)
+    : cities.filter(c => c.name.toLowerCase().includes(query.toLowerCase()));
+
+  const select = (city) => {
+    onChange(city.slug);
+    setQuery(city.name);
+    setOpen(false);
+  };
+
+  const handleInput = (e) => {
+    setQuery(e.target.value);
+    onChange(''); // clear slug until a city is actually picked
+    setOpen(true);
+  };
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <div style={{
+        display: 'flex', alignItems: 'center',
+        border: `1.5px solid ${focused ? 'var(--dl-red)' : '#d1d5db'}`,
+        borderRadius: 8, background: '#fff',
+        transition: 'border-color .15s',
+        overflow: 'hidden',
+      }}>
+        <i className="bi bi-search" style={{
+          padding: '0 10px', color: focused ? 'var(--dl-red)' : '#9ca3af',
+          fontSize: '.8rem', flexShrink: 0,
+        }}></i>
+        <input
+          id={id}
+          type="text"
+          autoComplete="off"
+          value={query}
+          placeholder={placeholder}
+          onFocus={() => { setFocused(true); setOpen(true); }}
+          onBlur={() => setFocused(false)}
+          onChange={handleInput}
+          style={{
+            flex: 1, border: 'none', outline: 'none',
+            padding: '.55rem .5rem .55rem 0',
+            fontSize: '.88rem', fontWeight: 600,
+            background: 'transparent', minWidth: 0,
+          }}
+        />
+        {query.length > 0 && (
+          <button
+            type="button"
+            onMouseDown={e => { e.preventDefault(); setQuery(''); onChange(''); setOpen(true); }}
+            style={{ border: 'none', background: 'none', padding: '0 10px', color: '#9ca3af', cursor: 'pointer', fontSize: '.8rem' }}
+          >
+            <i className="bi bi-x-lg"></i>
+          </button>
+        )}
+      </div>
+
+      {/* Dropdown */}
+      {open && filtered.length > 0 && (
+        <ul style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+          background: '#fff', border: '1.5px solid #e5e7eb',
+          borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.13)',
+          listStyle: 'none', margin: 0, padding: '4px 0',
+          zIndex: 9999, maxHeight: 220, overflowY: 'auto',
+        }}>
+          {filtered.map(city => (
+            <li
+              key={city.slug}
+              onMouseDown={e => { e.preventDefault(); select(city); }}
+              style={{
+                padding: '.55rem 1rem', cursor: 'pointer', fontSize: '.88rem',
+                fontWeight: city.slug === value ? 700 : 500,
+                color: city.slug === value ? 'var(--dl-red)' : '#1a1a1a',
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: city.slug === value ? '#fff5f5' : 'transparent',
+              }}
+              onMouseEnter={e => { if (city.slug !== value) e.currentTarget.style.background = '#f9fafb'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = city.slug === value ? '#fff5f5' : 'transparent'; }}
+            >
+              <i className="bi bi-geo-alt-fill" style={{ color: 'var(--dl-red)', fontSize: '.75rem', flexShrink: 0 }}></i>
+              {city.name}
+              {city.slug === value && <i className="bi bi-check2" style={{ marginLeft: 'auto', color: 'var(--dl-red)' }}></i>}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* No results */}
+      {open && query.trim().length > 0 && filtered.length === 0 && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+          background: '#fff', border: '1.5px solid #e5e7eb', borderRadius: 10,
+          padding: '.75rem 1rem', fontSize: '.82rem', color: '#9ca3af',
+          zIndex: 9999, boxShadow: '0 8px 24px rgba(0,0,0,.10)',
+        }}>
+          <i className="bi bi-search me-2"></i>No cities found for "{query}"
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
 export default function Home() {
   const navigate = useNavigate();
   const [cities, setCities] = useState([]);
@@ -45,8 +170,14 @@ export default function Home() {
   const handleSearch = (e) => {
     e.preventDefault();
     setError('');
-    if (!form.origin || !form.destination || !form.date) { setError('Please fill in all fields to search.'); return; }
-    if (form.origin === form.destination) { setError('Origin and destination cannot be the same.'); return; }
+    if (!form.origin || !form.destination || !form.date) {
+      setError('Please select a city for both origin and destination.');
+      return;
+    }
+    if (form.origin === form.destination) {
+      setError('Origin and destination cannot be the same.');
+      return;
+    }
     navigate(`/results?origin=${form.origin}&destination=${form.destination}&date=${form.date}`);
   };
 
@@ -77,7 +208,7 @@ export default function Home() {
         <div className="container" style={{ position: 'relative', zIndex: 1, paddingTop: '1.5rem', paddingBottom: '2rem' }}>
           <div className="row align-items-center g-4">
 
-            {/* Left copy — hidden on mobile to save space, shown md+ */}
+            {/* Left copy — hidden on mobile */}
             <div className="col-lg-6 d-none d-lg-block">
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(212,160,23,0.2)', border: '1px solid rgba(212,160,23,0.5)', borderRadius: 24, padding: '4px 14px', marginBottom: 18, color: '#D4A017', fontSize: '.75rem', fontWeight: 700, letterSpacing: 1 }}>
                 <i className="bi bi-bus-front-fill"></i> KENYA'S #1 BUS SERVICE
@@ -133,32 +264,43 @@ export default function Home() {
 
                     {/* From */}
                     <div>
-                      <label style={{ fontWeight: 700, fontSize: '.72rem', color: '#888', textTransform: 'uppercase', letterSpacing: .8, marginBottom: 4, display: 'block' }}>
+                      <label htmlFor="city-from" style={{ fontWeight: 700, fontSize: '.72rem', color: '#888', textTransform: 'uppercase', letterSpacing: .8, marginBottom: 4, display: 'block' }}>
                         <i className="bi bi-geo-alt me-1" style={{ color: 'var(--dl-red)' }}></i>From
                       </label>
-                      <select className="form-select" value={form.origin} onChange={e => setForm({ ...form, origin: e.target.value })} style={{ fontWeight: 600, fontSize: '.88rem' }}>
-                        <option value="">Select departure city</option>
-                        {cities.map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
-                      </select>
+                      <CityAutocomplete
+                        id="city-from"
+                        cities={cities}
+                        value={form.origin}
+                        onChange={slug => setForm(f => ({ ...f, origin: slug }))}
+                        placeholder="Type departure city…"
+                      />
                     </div>
 
                     {/* Swap + To */}
                     <div style={{ position: 'relative' }}>
-                      <button type="button" onClick={() => setForm({ ...form, origin: form.destination, destination: form.origin })} style={{
-                        position: 'absolute', right: 10, top: -16, zIndex: 2,
-                        background: 'var(--dl-red)', border: 'none', borderRadius: '50%',
-                        width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', boxShadow: '0 3px 10px rgba(204,0,0,.3)',
-                      }} title="Swap cities">
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, origin: f.destination, destination: f.origin }))}
+                        style={{
+                          position: 'absolute', right: 10, top: -16, zIndex: 2,
+                          background: 'var(--dl-red)', border: 'none', borderRadius: '50%',
+                          width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          cursor: 'pointer', boxShadow: '0 3px 10px rgba(204,0,0,.3)',
+                        }}
+                        title="Swap cities"
+                      >
                         <i className="bi bi-arrow-down-up" style={{ color: '#fff', fontSize: '.72rem' }}></i>
                       </button>
-                      <label style={{ fontWeight: 700, fontSize: '.72rem', color: '#888', textTransform: 'uppercase', letterSpacing: .8, marginBottom: 4, display: 'block' }}>
+                      <label htmlFor="city-to" style={{ fontWeight: 700, fontSize: '.72rem', color: '#888', textTransform: 'uppercase', letterSpacing: .8, marginBottom: 4, display: 'block' }}>
                         <i className="bi bi-geo-alt-fill me-1" style={{ color: 'var(--dl-red)' }}></i>To
                       </label>
-                      <select className="form-select" value={form.destination} onChange={e => setForm({ ...form, destination: e.target.value })} style={{ fontWeight: 600, fontSize: '.88rem' }}>
-                        <option value="">Select destination city</option>
-                        {cities.map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
-                      </select>
+                      <CityAutocomplete
+                        id="city-to"
+                        cities={cities}
+                        value={form.destination}
+                        onChange={slug => setForm(f => ({ ...f, destination: slug }))}
+                        placeholder="Type destination city…"
+                      />
                     </div>
 
                     {/* Date */}
@@ -166,10 +308,14 @@ export default function Home() {
                       <label style={{ fontWeight: 700, fontSize: '.72rem', color: '#888', textTransform: 'uppercase', letterSpacing: .8, marginBottom: 4, display: 'block' }}>
                         <i className="bi bi-calendar3 me-1" style={{ color: 'var(--dl-red)' }}></i>Travel Date
                       </label>
-                      <input type="date" className="form-control" value={form.date}
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={form.date}
                         min={new Date().toISOString().split('T')[0]}
-                        onChange={e => setForm({ ...form, date: e.target.value })}
-                        style={{ fontWeight: 600, fontSize: '.88rem' }} />
+                        onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                        style={{ fontWeight: 600, fontSize: '.88rem' }}
+                      />
                     </div>
 
                     <button type="submit" className="btn-dl-primary w-100" style={{ padding: '.8rem', fontSize: '.95rem', marginTop: 2 }}>
@@ -187,6 +333,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
+
           </div>
         </div>
       </section>

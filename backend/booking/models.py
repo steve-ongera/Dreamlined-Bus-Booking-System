@@ -334,3 +334,38 @@ class JobPosting(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        
+        
+        
+
+class SeatLock(models.Model):
+    """
+    Temporary seat reservation held for 5 minutes while a user books.
+    Prevents race conditions where multiple users select the same seat.
+    """
+    trip        = models.ForeignKey('Trip', on_delete=models.CASCADE, related_name='seat_locks')
+    seat        = models.ForeignKey('SeatLayout', on_delete=models.CASCADE, related_name='locks')
+    session_key = models.CharField(max_length=64)   # anonymous session identifier
+    locked_at   = models.DateTimeField(auto_now_add=True)
+    expires_at  = models.DateTimeField()
+
+    class Meta:
+        unique_together = ('trip', 'seat')           # only one lock per seat per trip
+        indexes = [models.Index(fields=['expires_at'])]
+
+    def __str__(self):
+        return f"Lock: {self.seat.seat_number} on trip {self.trip_id} by {self.session_key}"
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+    @classmethod
+    def cleanup_expired(cls):
+        """Remove all expired locks — call at start of every lock/status request."""
+        cls.objects.filter(expires_at__lte=timezone.now()).delete()
+
+    @classmethod
+    def lock_duration(cls):
+        from datetime import timedelta
+        return timedelta(minutes=5)
