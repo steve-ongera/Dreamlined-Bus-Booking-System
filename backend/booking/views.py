@@ -638,6 +638,8 @@ class AdminBusTypeViewSet(AdminAuthMixin, viewsets.ModelViewSet):
 
 # ── Bus ───────────────────────────────────────────────────────────────────────
 
+from django.db import transaction  # ADD THIS to your imports at the top of admin_views.py
+
 class AdminBusViewSet(AdminAuthMixin, viewsets.ModelViewSet):
     queryset = Bus.objects.all().select_related('bus_type').prefetch_related('seats').order_by('name')
     lookup_field = 'slug'
@@ -657,38 +659,56 @@ class AdminBusViewSet(AdminAuthMixin, viewsets.ModelViewSet):
         Accepts: { seats: [ {seat_number, seat_class, row_number, column_number,
                               is_aisle_gap, is_driver_seat, bg_color, text_color,
                               custom_label, extra_padding, col_span, row_span} ] }
-        Replaces the bus's entire seat layout.
+        Replaces the bus's entire seat layout atomically.
         """
         bus = self.get_object()
         seats_data = request.data.get('seats', [])
 
-        # Delete existing seats and recreate
-        bus.seats.all().delete()
-        created = []
-        for s in seats_data:
-            seat = SeatLayout.objects.create(
-                bus=bus,
-                seat_number=s.get('seat_number', ''),
-                seat_class=s.get('seat_class', 'economy'),
-                seat_type=s.get('seat_type', 'window'),
-                row_number=s.get('row_number', 1),
-                column_number=s.get('column_number', 1),
-                row_span=s.get('row_span', 1),
-                col_span=s.get('col_span', 1),
-                is_aisle_gap=s.get('is_aisle_gap', False),
-                is_driver_seat=s.get('is_driver_seat', False),
-                bg_color=s.get('bg_color', ''),
-                text_color=s.get('text_color', ''),
-                custom_label=s.get('custom_label', ''),
-                extra_padding=s.get('extra_padding', 0),
-                is_active=s.get('is_active', True),
-            )
-            created.append(seat.seat_number)
+        with transaction.atomic():
+            bus.seats.all().delete()
+            created = []
+            seen_numbers = {}
 
-        # Update total_seats count
-        bus.total_seats = len([s for s in seats_data
-                                if not s.get('is_aisle_gap') and not s.get('is_driver_seat')])
-        bus.save(update_fields=['total_seats'])
+            for s in seats_data:
+                seat_number = s.get('seat_number', '').strip()
+
+                # Generate unique fallback for empty or duplicate seat numbers
+                if not seat_number or seat_number in seen_numbers:
+                    row = s.get('row_number', 0)
+                    col = s.get('column_number', 0)
+                    if s.get('is_driver_seat'):
+                        seat_number = f"DRV-{row}-{col}"
+                    elif s.get('is_aisle_gap'):
+                        seat_number = f"AISLE-{row}-{col}"
+                    else:
+                        seat_number = f"SEAT-{row}-{col}"
+
+                seen_numbers[seat_number] = True
+
+                seat = SeatLayout.objects.create(
+                    bus=bus,
+                    seat_number=seat_number,
+                    seat_class=s.get('seat_class', 'economy'),
+                    seat_type=s.get('seat_type', 'window'),
+                    row_number=s.get('row_number', 1),
+                    column_number=s.get('column_number', 1),
+                    row_span=s.get('row_span', 1),
+                    col_span=s.get('col_span', 1),
+                    is_aisle_gap=s.get('is_aisle_gap', False),
+                    is_driver_seat=s.get('is_driver_seat', False),
+                    bg_color=s.get('bg_color', ''),
+                    text_color=s.get('text_color', ''),
+                    custom_label=s.get('custom_label', ''),
+                    extra_padding=s.get('extra_padding', 0),
+                    is_active=s.get('is_active', True),
+                )
+                created.append(seat.seat_number)
+
+            bus.total_seats = len([
+                s for s in seats_data
+                if not s.get('is_aisle_gap') and not s.get('is_driver_seat')
+            ])
+            bus.save(update_fields=['total_seats'])
 
         return Response({'saved': len(created), 'seats': created})
 
@@ -716,7 +736,6 @@ class AdminBusViewSet(AdminAuthMixin, viewsets.ModelViewSet):
                 setattr(seat, field, value)
         seat.save()
         return Response(AdminSeatLayoutSerializer(seat).data)
-
 
 # ── Route ─────────────────────────────────────────────────────────────────────
 
