@@ -2,9 +2,116 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+
+    <!-- ── Favicon / App Icons ──────────────────────────────────────────── -->
+    <link rel="icon"             type="image/png"       href="/dreamline-logo.png" />
+    <link rel="apple-touch-icon"                        href="/dreamline-logo.png" />
+    <link rel="shortcut icon"    type="image/png"       href="/dreamline-logo.png" />
+
+    <!-- ── Viewport ─────────────────────────────────────────────────────── -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DreamLine Booking</title>
+    <meta name="theme-color" content="#CC0000" />
+
+    <!-- ── Primary SEO ───────────────────────────────────────────────────── -->
+    <title>Dreamline Bus – Online Ticket Booking Kenya | Nairobi Mombasa Kisumu</title>
+    <meta name="description"
+      content="Book Dreamline bus tickets online. Fast, reliable intercity travel across Kenya — Nairobi, Mombasa, Kisumu, Nakuru, Eldoret, Malindi and more. Secure M-Pesa payment, instant e-ticket." />
+    <meta name="keywords"
+      content="bus booking Kenya, online bus ticket Kenya, Dreamline bus, Nairobi to Mombasa bus, Nairobi Kisumu bus, Kenya bus ticket online, cheap bus tickets Kenya, M-Pesa bus booking, intercity bus Kenya, Dreamline online booking, bus seat reservation Kenya, Nairobi Nakuru bus, Nairobi Eldoret bus, Mombasa Malindi bus, SGR alternative bus, VIP bus Kenya, executive bus Kenya" />
+    <meta name="author" content="Dreamline Bus Services" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://dreamline.co.ke/" />
+
+    <!-- ── Open Graph (Facebook / WhatsApp / LinkedIn) ───────────────────── -->
+    <meta property="og:type"        content="website" />
+    <meta property="og:site_name"   content="Dreamline Bus" />
+    <meta property="og:url"         content="https://dreamline.co.ke/" />
+    <meta property="og:title"       content="Dreamline Bus – Book Tickets Online | Kenya" />
+    <meta property="og:description" content="Comfortable, affordable intercity bus travel across Kenya. Book your seat online in minutes and pay via M-Pesa. Nairobi · Mombasa · Kisumu · Nakuru · Eldoret." />
+    <meta property="og:image"       content="https://dreamline.co.ke/dreamline-logo.png" />
+    <meta property="og:image:alt"   content="Dreamline Bus Services Logo" />
+    <meta property="og:locale"      content="en_KE" />
+
+    <!-- ── Twitter / X Card ──────────────────────────────────────────────── -->
+    <meta name="twitter:card"        content="summary_large_image" />
+    <meta name="twitter:site"        content="@DreamlineBus" />
+    <meta name="twitter:title"       content="Dreamline Bus – Book Tickets Online | Kenya" />
+    <meta name="twitter:description" content="Comfortable, affordable intercity bus travel across Kenya. Book your seat online and pay via M-Pesa." />
+    <meta name="twitter:image"       content="https://dreamline.co.ke/dreamline-logo.png" />
+
+    <!-- ── Geo / Regional ────────────────────────────────────────────────── -->
+    <meta name="geo.region"      content="KE" />
+    <meta name="geo.placename"   content="Nairobi, Kenya" />
+    <meta name="geo.position"    content="-1.286389;36.817223" />
+    <meta name="ICBM"            content="-1.286389, 36.817223" />
+
+    <!-- ── JSON-LD Structured Data ───────────────────────────────────────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://dreamline.co.ke/#organization",
+          "name": "Dreamline Bus Services",
+          "url": "https://dreamline.co.ke",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://dreamline.co.ke/dreamline-logo.png"
+          },
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "Customer Support",
+            "areaServed": "KE",
+            "availableLanguage": ["English", "Swahili"]
+          },
+          "sameAs": [
+            "https://www.facebook.com/DreamlineBus",
+            "https://twitter.com/DreamlineBus"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://dreamline.co.ke/#website",
+          "url": "https://dreamline.co.ke",
+          "name": "Dreamline Bus",
+          "description": "Online bus ticket booking for intercity travel across Kenya",
+          "publisher": { "@id": "https://dreamline.co.ke/#organization" },
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://dreamline.co.ke/results?origin={origin}&destination={destination}&date={date}"
+            },
+            "query-input": [
+              "required name=origin",
+              "required name=destination",
+              "required name=date"
+            ]
+          }
+        },
+        {
+          "@type": "BusOrCoach",
+          "name": "Dreamline Bus Services",
+          "provider": { "@id": "https://dreamline.co.ke/#organization" },
+          "areaServed": {
+            "@type": "Country",
+            "name": "Kenya"
+          },
+          "availableAtOrFrom": [
+            { "@type": "Place", "name": "Nairobi" },
+            { "@type": "Place", "name": "Mombasa" },
+            { "@type": "Place", "name": "Kisumu" },
+            { "@type": "Place", "name": "Nakuru" },
+            { "@type": "Place", "name": "Eldoret" },
+            { "@type": "Place", "name": "Malindi" }
+          ]
+        }
+      ]
+    }
+    </script>
+
+    <!-- ── Bootstrap Icons ───────────────────────────────────────────────── -->
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
