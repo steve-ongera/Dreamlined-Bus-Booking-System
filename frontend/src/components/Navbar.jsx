@@ -8,12 +8,10 @@ export default function Navbar() {
   const [isAdmin, setIsAdmin] = useState(false);
   const navigate = useNavigate();
 
-  // Check if an admin token exists so we can show the admin link
   useEffect(() => {
     setIsAdmin(!!getToken());
   }, []);
 
-  // Prevent body scroll when drawer is open
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
@@ -26,12 +24,27 @@ export default function Navbar() {
   };
 
   const navItems = [
-    { to: '/',               label: 'Home',            icon: 'bi-house-fill' },
-    { to: '/about-dreamline',label: 'About Dreamline', icon: 'bi-bus-front-fill' },
-    { to: '/track',          label: 'Track Ticket',    icon: 'bi-ticket-perforated-fill' },
-    { to: '/careers',        label: 'Careers',         icon: 'bi-briefcase-fill' },
-    { to: '/contact',        label: 'Contact',         icon: 'bi-envelope-fill' },
+    { to: '/',                label: 'Home',            icon: 'bi-house-fill' },
+    { to: '/about-dreamline', label: 'About Dreamline', icon: 'bi-bus-front-fill' },
+    { to: '/track',           label: 'Track Ticket',    icon: 'bi-ticket-perforated-fill' },
+    { to: '/careers',         label: 'Careers',         icon: 'bi-briefcase-fill' },
+    { to: '/contact',         label: 'Contact',         icon: 'bi-envelope-fill' },
   ];
+
+  /* ── Shared logo image ── */
+  const LogoImg = ({ size = 36, borderRadius = 8 }) => (
+    <img
+      src="/dreamline-logo.png"
+      alt="Dreamline Bus Services"
+      style={{
+        width: size, height: size,
+        borderRadius,
+        objectFit: 'contain',
+        flexShrink: 0,
+        display: 'block',
+      }}
+    />
+  );
 
   return (
     <>
@@ -41,12 +54,7 @@ export default function Navbar() {
 
           {/* Brand */}
           <Link to="/" className="navbar-brand d-flex align-items-center gap-2" onClick={() => setOpen(false)}>
-            <div style={{
-              background: 'var(--dl-red)', color: 'white',
-              width: 36, height: 36, borderRadius: 7,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 900, fontSize: '.95rem', letterSpacing: '-1px', flexShrink: 0,
-            }}>DL</div>
+            <LogoImg size={38} borderRadius={8} />
             <div>
               <div style={{ fontWeight: 800, fontSize: '.9rem', lineHeight: 1, color: 'var(--dl-dark)' }}>DREAMLINE</div>
               <div style={{ fontSize: '.6rem', color: 'var(--dl-gray)', letterSpacing: 1 }}>BUS SERVICES</div>
@@ -63,7 +71,7 @@ export default function Navbar() {
                     end={item.to === '/'}
                     className={({ isActive }) => `nav-link d-flex align-items-center gap-1${isActive ? ' active' : ''}`}
                   >
-                    <i className={`bi ${item.icon}`} style={{ fontSize: '.8rem' }}></i>
+                    <i className={`bi ${item.icon}`} style={{ fontSize: '.8rem' }} />
                     <span style={{ fontSize: '.88rem' }}>{item.label}</span>
                   </NavLink>
                 </li>
@@ -77,7 +85,7 @@ export default function Navbar() {
                     className="nav-link d-flex align-items-center gap-1"
                     style={{ color: 'var(--dl-red)', fontWeight: 700 }}
                   >
-                    <i className="bi bi-speedometer2" style={{ fontSize: '.8rem' }}></i>
+                    <i className="bi bi-speedometer2" style={{ fontSize: '.8rem' }} />
                     <span style={{ fontSize: '.88rem' }}>Dashboard</span>
                   </Link>
                   <button
@@ -88,7 +96,7 @@ export default function Navbar() {
                       color: 'var(--dl-gray)', fontSize: '.8rem', padding: '.2rem .3rem',
                     }}
                   >
-                    <i className="bi bi-box-arrow-right"></i>
+                    <i className="bi bi-box-arrow-right" />
                   </button>
                 </li>
               ) : (
@@ -98,7 +106,7 @@ export default function Navbar() {
                     className="nav-link d-flex align-items-center gap-1"
                     style={{ color: 'var(--dl-gray)' }}
                   >
-                    <i className="bi bi-shield-lock" style={{ fontSize: '.8rem' }}></i>
+                    <i className="bi bi-shield-lock" style={{ fontSize: '.8rem' }} />
                     <span style={{ fontSize: '.88rem' }}>Admin</span>
                   </Link>
                 </li>
@@ -113,7 +121,7 @@ export default function Navbar() {
             aria-label="Open menu"
             style={{ marginLeft: 'auto' }}
           >
-            <i className="bi bi-list" style={{ fontSize: '1.6rem', color: 'var(--dl-dark)' }}></i>
+            <i className="bi bi-list" style={{ fontSize: '1.6rem', color: 'var(--dl-dark)' }} />
           </button>
         </div>
       </nav>
@@ -150,12 +158,14 @@ export default function Navbar() {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
         }}>
           <Link to="/" onClick={() => setOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+            {/* White-tinted logo container so logo is visible on red bg */}
             <div style={{
-              background: 'rgba(255,255,255,0.2)', color: 'white',
-              width: 34, height: 34, borderRadius: 6,
+              background: 'rgba(255,255,255,0.92)',
+              borderRadius: 7, padding: 3, flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 900, fontSize: '.9rem',
-            }}>DL</div>
+            }}>
+              <LogoImg size={30} borderRadius={5} />
+            </div>
             <div>
               <div style={{ fontWeight: 800, fontSize: '.88rem', color: '#fff', lineHeight: 1 }}>DREAMLINE</div>
               <div style={{ fontSize: '.58rem', color: 'rgba(255,255,255,.75)', letterSpacing: 1 }}>BUS SERVICES</div>
@@ -169,7 +179,7 @@ export default function Navbar() {
               cursor: 'pointer', color: '#fff',
             }}
           >
-            <i className="bi bi-x-lg" style={{ fontSize: '1rem' }}></i>
+            <i className="bi bi-x-lg" style={{ fontSize: '1rem' }} />
           </button>
         </div>
 
@@ -199,7 +209,7 @@ export default function Navbar() {
                     background: isActive ? 'var(--dl-red)' : '#f0f0f0',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                   }}>
-                    <i className={`bi ${item.icon}`} style={{ fontSize: '.85rem', color: isActive ? '#fff' : 'var(--dl-gray)' }}></i>
+                    <i className={`bi ${item.icon}`} style={{ fontSize: '.85rem', color: isActive ? '#fff' : 'var(--dl-gray)' }} />
                   </span>
                   {item.label}
                 </>
@@ -222,7 +232,7 @@ export default function Navbar() {
                   }}
                 >
                   <span style={{ width: 32, height: 32, borderRadius: 7, background: 'var(--dl-red)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <i className="bi bi-speedometer2" style={{ fontSize: '.85rem', color: '#fff' }}></i>
+                    <i className="bi bi-speedometer2" style={{ fontSize: '.85rem', color: '#fff' }} />
                   </span>
                   Admin Dashboard
                 </Link>
@@ -237,7 +247,7 @@ export default function Navbar() {
                   }}
                 >
                   <span style={{ width: 32, height: 32, borderRadius: 7, background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <i className="bi bi-box-arrow-right" style={{ fontSize: '.85rem', color: 'var(--dl-gray)' }}></i>
+                    <i className="bi bi-box-arrow-right" style={{ fontSize: '.85rem', color: 'var(--dl-gray)' }} />
                   </span>
                   Logout Admin
                 </button>
@@ -254,7 +264,7 @@ export default function Navbar() {
                 }}
               >
                 <span style={{ width: 32, height: 32, borderRadius: 7, background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <i className="bi bi-shield-lock" style={{ fontSize: '.85rem', color: 'var(--dl-gray)' }}></i>
+                  <i className="bi bi-shield-lock" style={{ fontSize: '.85rem', color: 'var(--dl-gray)' }} />
                 </span>
                 Admin Login
               </Link>
@@ -262,14 +272,14 @@ export default function Navbar() {
           </div>
         </nav>
 
-        {/* Drawer footer — call us */}
+        {/* Drawer footer */}
         <div style={{ padding: '1rem', borderTop: '1px solid var(--dl-border)', flexShrink: 0 }}>
           <a href="tel:+254700000000" style={{
             display: 'flex', alignItems: 'center', gap: 10,
             background: '#f5f5f7', borderRadius: 8, padding: '.65rem .9rem',
             textDecoration: 'none', color: 'var(--dl-dark)',
           }}>
-            <i className="bi bi-telephone-fill" style={{ color: 'var(--dl-red)', fontSize: '.9rem' }}></i>
+            <i className="bi bi-telephone-fill" style={{ color: 'var(--dl-red)', fontSize: '.9rem' }} />
             <div>
               <div style={{ fontSize: '.7rem', color: 'var(--dl-gray)', lineHeight: 1 }}>Call us 24/7</div>
               <div style={{ fontWeight: 700, fontSize: '.85rem', lineHeight: 1.4 }}>+254 700 000 000</div>
