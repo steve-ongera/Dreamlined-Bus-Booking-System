@@ -54,3 +54,7 @@ INFO 2026-02-27 22:07:39,173 views M-Pesa STK response status: 200
 INFO 2026-02-27 22:07:39,174 views M-Pesa STK response body: {'MerchantRequestID': 'ca0e-4e1f-9e34-dd0f6d42cbad4211', 'CheckoutRequestID': 'ws_CO_27022026220738291757790687', 'ResponseCode': '0', 'ResponseDescription': 'Success. Request accepted for processing', 'CustomerMessage': 'Success. Request accepted for processing'}
 INFO 2026-02-27 22:07:48,536 views M-Pesa callback: ResultCode=0 CheckoutID=ws_CO_27022026220738291757790687
 INFO 2026-02-27 22:07:52,457 views Payment completed for DL9913B957
+INFO 2026-05-07 13:08:34,988 views M-Pesa token response status: 200
+INFO 2026-05-07 13:08:35,019 views M-Pesa STK push payload for DL344FA03D: phone=254757790687, amount=2000, shortcode=174379
+INFO 2026-05-07 13:08:37,021 views M-Pesa STK response status: 200
+INFO 2026-05-07 13:08:37,022 views M-Pesa STK response body: {'MerchantRequestID': '8a89-4a52-90df-46968118368419570', 'CheckoutRequestID': 'ws_CO_07052026130837808757790687', 'ResponseCode': '0', 'ResponseDescription': 'Success. Request accepted for processing', 'CustomerMessage': 'Success. Request accepted for processing'}
